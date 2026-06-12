@@ -3,9 +3,8 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
-
-
 #--------- data model Workshop ----------------------
+
 class Workshop(db.Model):
     
     __tablename__ = "workshops"
@@ -43,7 +42,6 @@ class User(db.Model):
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
-
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False) ####
     role = db.Column(db.String(20), nullable=False)
@@ -62,7 +60,6 @@ class User(db.Model):
             "created_at": self.created_at.isoformat()
         }
 
-
 # ---------------------- dm Employee ----------------------
 class Employee(db.Model):
 
@@ -71,7 +68,7 @@ class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     first_name = db.Column(db.String(80), nullable=False)
     last_name = db.Column(db.String(80), nullable=False)
-    dni = db.Column(db.String(20), unique=True, nullable=True)
+    dni = db.Column(db.String(20), unique=True, nullable=False)
     phone = db.Column(db.String(20), nullable=False)
     workshop_id = db.Column(db.Integer, db.ForeignKey("workshops.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False)

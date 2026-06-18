@@ -1,36 +1,18 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import styles from "./Login.module.css";
 
 export const Login = () => {
+  const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(null); 
+  
   const navigate = useNavigate();
 
-  const [showPassword, setShowPassword] = useState(false);
-
-  const [formData, setFormData] = useState({
-    email: "",
-    password: ""
-  });
-
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleInputChange = (event) => {
-    const { name, value } = event.target;
-
-    setFormData({
-      ...formData,
-      [name]: value
-    });
-
-    setError("");
-  };
-
-  const handleLogin = async (event) => {
-    event.preventDefault();
-
-    setLoading(true);
-    setError("");
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError(null);
 
     try {
       const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/login`, {
@@ -38,61 +20,41 @@ export const Login = () => {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ email, password })
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
-        setError(data.error || "Email o contraseña incorrectos.");
-        return;
-      }
-
-      const token = data.token || data.access_token;
-
-      if (!token || !data.user) {
-        setError("La respuesta del servidor no trae token o usuario.");
-        return;
-      }
-
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-
-      if (data.employee) {
-        localStorage.setItem("employee", JSON.stringify(data.employee));
+      if (response.ok) {
+        localStorage.setItem("token", data.token);
+        navigate("/dashboard");
       } else {
-        localStorage.removeItem("employee");
+        setError(data.error || "Login failed. Please try again");
       }
-
-      navigate("/dashboard");
-    } catch (error) {
-      setError("No se pudo conectar con el servidor.");
-      console.error(error);
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.error("Error durante el login:", err);
+      setError("Failed to connect to the server");
     }
   };
 
   return (
-    <div className="container d-flex justify-content-center align-items-center min-vh-100 bg-light">
-      <div className={`card p-4 shadow-sm border-0 bg-white ${styles.loginCard}`}>
-        <h2 className={`fw-bold m-0 text-dark ${styles.titleHello}`}>
-          Bienvenido
-        </h2>
+    <div className="container-fluid d-flex justify-content-center align-items-center min-vh-100 bg-light">
+      <div className={`card p-4 shadow-sm border-0 ${styles.loginCard}`}>
+        <div className="mb-4">
+          <button 
+            type="button" 
+            onClick={() => navigate("/")} 
+            className={`btn p-0 text-danger ${styles.backArrow}`}>
+            <i className="fa-solid fa-arrow-left"></i>
+          </button>
+        </div>
 
-        <h3 className={`fw-bold mb-4 text-dark ${styles.titleWelcome}`}>
-          Iniciar sesión
-        </h3>
+        <h2 className={`fw-bold m-0 text-dark ${styles.titleHello}`}>Hello there!</h2>
+        <h3 className={`fw-bold mb-4 text-dark ${styles.titleWelcome}`}>Welcome Back</h3>
 
         {error && (
-          <div className="alert alert-danger alert-dismissible fade show" role="alert">
+          <div className="alert alert-danger py-2 small" role="alert">
             {error}
-
-            <button
-              type="button"
-              className="btn-close"
-              onClick={() => setError("")}
-            ></button>
           </div>
         )}
 
@@ -100,66 +62,48 @@ export const Login = () => {
           <div className="mb-3">
             <input
               type="email"
-              name="email"
-              className={`form-control py-3 px-4 border ${styles.loginInput}`}
-              placeholder="Email"
-              value={formData.email}
-              onChange={handleInputChange}
+              className={`form-control py-3 px-4 ${styles.loginInput}`}
+              placeholder="E-mail address"
+              value={email}
               required
+              onChange={(e) => setEmail(e.target.value)}
             />
           </div>
 
-          <div className="mb-4 position-relative">
+          <div className="mb-2 position-relative">
             <input
               type={showPassword ? "text" : "password"}
-              name="password"
-              className={`form-control py-3 px-4 border ${styles.loginInput}`}
-              placeholder="Contraseña"
-              value={formData.password}
-              onChange={handleInputChange}
+              className={`form-control py-3 px-4 ${styles.loginInput}`}
+              placeholder="Password"
+              value={password}
               required
+              onChange={(e) => setPassword(e.target.value)}
             />
-
-            <button
-              type="button"
+            <button 
+              type="button" 
               className={`btn p-0 position-absolute top-50 end-0 translate-middle-y me-3 text-secondary ${styles.passwordEye}`}
               onClick={() => setShowPassword(!showPassword)}
             >
-              <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+              <i className={`fa-solid ${showPassword ? "fa-eye" : "fa-eye-slash"}`}></i>
             </button>
           </div>
 
-          <button
-            type="submit"
-            className={`btn w-100 py-3 fw-bold ${styles.btnLogin}`}
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <span
-                  className="spinner-border spinner-border-sm me-2"
-                  role="status"
-                  aria-hidden="true"
-                ></span>
-                Entrando...
-              </>
-            ) : (
-              "Entrar"
-            )}
+          <div className="text-end mb-4">
+            <a href="#" className="text-danger text-decoration-none small fw-semibold">
+              Forgot your password?
+            </a>
+          </div>
+
+          <button type="submit" className={`btn w-100 py-3 fw-bold ${styles.btnLogin}`}>
+            Log In
           </button>
         </form>
 
-        <div className="text-center mt-3">
-          <span className="text-secondary small">¿No tienes taller registrado? </span>
-
-          <button
-            type="button"
-            className="btn btn-link p-0 text-dark fw-bold text-decoration-none small"
-            onClick={() => navigate("/register")}
-          >
-            Crear cuenta admin
-          </button>
+        <div className="text-center mt-2">
+          <span className="text-secondary small">Don't have an account? </span>
+          <Link to="/registro/coordinador" className="text-dark fw-bold text-decoration-none small">Register</Link>
         </div>
+
       </div>
     </div>
   );

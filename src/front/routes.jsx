@@ -10,6 +10,8 @@ import { Home } from "./pages/Home";
 import { Single } from "./pages/Single";
 import { Demo } from "./pages/Demo";
 import { VehicleForm } from "./pages/VehicleForm";
+import { Login } from "./pages/Login";
+ 
 
 const Routes = createRoutesFromElements(
     // CreateRoutesFromElements function allows you to build route elements declaratively.
@@ -23,6 +25,10 @@ const Routes = createRoutesFromElements(
 
         {/* Nested Routes: Defines sub-routes within the BaseHome component. */}
         <Route index element={<Home />} />
+        <Route path= "/" element={<Home />} />
+        <Route path="login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/single/:theId" element={ <Single />} />  {/* Dynamic route for single items */}
         <Route path="/demo" element={<Demo />} />
         <Route path="/vehiculos/nuevo" element={<VehicleForm />} />

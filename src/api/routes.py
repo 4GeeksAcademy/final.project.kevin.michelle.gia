@@ -12,7 +12,8 @@ from api.models import (
     Customer,
     Vehicle,
     Service,
-    ServiceComment
+    ServiceComment,
+    ServiceStatusLog
 )
 
 
@@ -25,12 +26,12 @@ bcrypt = Bcrypt()
 ###---------------OPTIONS----------------------
 
 FUEL_TYPES = [
-    "gasolina",
+    "gasoline",
     "diesel",
-    "hibrido",
-    "hibrido_enchufable",
-    "electrico",
-    "glp"
+    "hybrid",
+    "plug_in_hybrid",
+    "electric",
+    "lpg"
 ]
 
 SERVICE_TYPES = [
@@ -38,6 +39,10 @@ SERVICE_TYPES = [
     "maintenance",
     "diagnostic",
     "inspection",
+    "bodywork",
+    "painting",
+    "cleaning",
+    "detailing",
     "other"
 ]
 
@@ -62,9 +67,6 @@ SERVICE_PRIORITIES = [
 COMMENT_TYPES = [
     "note",
     "status_update",
-    "customer_message",
-    "internal_observation",
-    "mileage_update",
     "admin_alert"
 ]
 
@@ -89,14 +91,46 @@ def get_current_user():
     return db.session.get(User, int(current_user_id))
 
 
+def get_current_employee(user):
+
+    if not user:
+        return None
+
+    return user.employee
+
+
+def get_current_workshop_id(user):
+
+    employee = get_current_employee(user)
+
+    if not employee:
+        return None
+
+    return employee.workshop_id
+
+
+def get_current_workshop(user):
+
+    employee = get_current_employee(user)
+
+    if not employee:
+        return None
+
+    return employee.workshop
+
+
 def is_admin(user):
 
-    return user is not None and user.role == "admin"
+    employee = get_current_employee(user)
+
+    return employee is not None and employee.role == "admin" and employee.is_active
 
 
 def is_mechanic(user):
 
-    return user is not None and user.role == "mechanic"
+    employee = get_current_employee(user)
+
+    return employee is not None and employee.role == "mechanic" and employee.is_active
 
 
 def parse_date(value):
@@ -115,11 +149,30 @@ def parse_datetime(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def create_status_log(service, employee_id, new_status, note=None):
+
+    status_log = ServiceStatusLog(
+        service_id=service.id,
+        from_status=service.status,
+        to_status=new_status,
+        employee_id=employee_id,
+        note=note
+    )
+
+    service.status = new_status
+
+    db.session.add(status_log)
+
+    return status_log
+
+
 def get_customer_or_error(customer_id, current_user):
+
+    workshop_id = get_current_workshop_id(current_user)
 
     customer = Customer.query.filter_by(
         id=customer_id,
-        workshop_id=current_user.workshop_id
+        workshop_id=workshop_id
     ).first()
 
     if not customer:
@@ -130,9 +183,11 @@ def get_customer_or_error(customer_id, current_user):
 
 def get_vehicle_or_error(vehicle_id, current_user):
 
+    workshop_id = get_current_workshop_id(current_user)
+
     vehicle = Vehicle.query.filter_by(
         id=vehicle_id,
-        workshop_id=current_user.workshop_id
+        workshop_id=workshop_id
     ).first()
 
     if not vehicle:
@@ -143,9 +198,11 @@ def get_vehicle_or_error(vehicle_id, current_user):
 
 def get_employee_or_error(employee_id, current_user):
 
+    workshop_id = get_current_workshop_id(current_user)
+
     employee = Employee.query.filter_by(
         id=employee_id,
-        workshop_id=current_user.workshop_id
+        workshop_id=workshop_id
     ).first()
 
     if not employee:
@@ -156,9 +213,11 @@ def get_employee_or_error(employee_id, current_user):
 
 def get_service_or_error(service_id, current_user):
 
+    workshop_id = get_current_workshop_id(current_user)
+
     service = Service.query.filter_by(
         id=service_id,
-        workshop_id=current_user.workshop_id
+        workshop_id=workshop_id
     ).first()
 
     if not service:
@@ -200,29 +259,48 @@ def register():
 
     company_name = data.get("company_name")
     cif = data.get("cif")
-    phone = data.get("phone")
-    email = data.get("email")
-    password = data.get("password")
-    password_confirm = data.get("password_confirm")
+
+    workshop_phone = data.get("workshop_phone") or data.get("phone")
+    workshop_email = data.get("workshop_email") or data.get("email")
 
     address = data.get("address")
     city = data.get("city")
     postal_code = data.get("postal_code")
 
-    if not company_name or not cif or not phone or not email or not password:
-        return error_response("company_name, cif, phone, email and password are required", 400)
+    first_name = data.get("first_name")
+    last_name = data.get("last_name")
+    dni = data.get("dni")
+    employee_phone = data.get("employee_phone") or data.get("admin_phone") or data.get("phone")
+
+    user_email = data.get("user_email") or data.get("email")
+    password = data.get("password")
+    password_confirm = data.get("password_confirm")
+
+    if not company_name or not cif or not workshop_phone or not workshop_email:
+        return error_response("company_name, cif, workshop_phone and workshop_email are required", 400)
+
+    if not first_name or not last_name or not dni or not employee_phone:
+        return error_response("first_name, last_name, dni and employee_phone are required for the admin employee", 400)
+
+    if not user_email or not password:
+        return error_response("user_email and password are required", 400)
 
     if password != password_confirm:
         return error_response("Passwords do not match", 400)
 
     existing_workshop = Workshop.query.filter(
-        (Workshop.email == email) | (Workshop.cif == cif)
+        (Workshop.email == workshop_email) | (Workshop.cif == cif)
     ).first()
 
     if existing_workshop:
         return error_response("A workshop with this email or CIF already exists", 409)
 
-    existing_user = User.query.filter_by(email=email).first()
+    existing_employee = Employee.query.filter_by(dni=dni).first()
+
+    if existing_employee:
+        return error_response("An employee with this DNI already exists", 409)
+
+    existing_user = User.query.filter_by(email=user_email).first()
 
     if existing_user:
         return error_response("A user with this email already exists", 409)
@@ -230,8 +308,8 @@ def register():
     new_workshop = Workshop(
         company_name=company_name,
         cif=cif,
-        phone=phone,
-        email=email,
+        phone=workshop_phone,
+        email=workshop_email,
         address=address,
         city=city,
         postal_code=postal_code
@@ -240,13 +318,25 @@ def register():
     db.session.add(new_workshop)
     db.session.flush()
 
+    admin_employee = Employee(
+        first_name=first_name,
+        last_name=last_name,
+        dni=dni,
+        phone=employee_phone,
+        role="admin",
+        job_position="admin",
+        workshop_id=new_workshop.id
+    )
+
+    db.session.add(admin_employee)
+    db.session.flush()
+
     password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
 
     admin_user = User(
-        email=email,
+        email=user_email,
         password_hash=password_hash,
-        role="admin",
-        workshop_id=new_workshop.id
+        employee_id=admin_employee.id
     )
 
     db.session.add(admin_user)
@@ -255,8 +345,9 @@ def register():
     token = create_access_token(
         identity=str(admin_user.id),
         additional_claims={
-            "role": admin_user.role,
-            "workshop_id": admin_user.workshop_id
+            "role": admin_employee.role,
+            "workshop_id": admin_employee.workshop_id,
+            "employee_id": admin_employee.id
         }
     )
 
@@ -265,7 +356,7 @@ def register():
         "token": token,
         "workshop": new_workshop.serialize(),
         "user": admin_user.serialize(),
-        "employee": None
+        "employee": admin_employee.serialize()
     }), 201
 
 
@@ -285,8 +376,13 @@ def login():
     if not user:
         return error_response("Invalid email or password", 401)
 
-    if not user.is_active:
-        return error_response("This user account is inactive", 403)
+    employee = user.employee
+
+    if not employee:
+        return error_response("This user account has no employee profile", 403)
+
+    if not employee.is_active:
+        return error_response("This employee account is inactive", 403)
 
     is_valid_password = bcrypt.check_password_hash(user.password_hash, password)
 
@@ -296,8 +392,9 @@ def login():
     token = create_access_token(
         identity=str(user.id),
         additional_claims={
-            "role": user.role,
-            "workshop_id": user.workshop_id
+            "role": employee.role,
+            "workshop_id": employee.workshop_id,
+            "employee_id": employee.id
         }
     )
 
@@ -305,7 +402,7 @@ def login():
         "message": "Login successful",
         "token": token,
         "user": user.serialize(),
-        "employee": user.employee.serialize() if user.employee else None
+        "employee": employee.serialize()
     }), 200
 
 
@@ -318,10 +415,15 @@ def get_me():
     if not current_user:
         return error_response("User not found", 404)
 
+    employee = current_user.employee
+
+    if not employee:
+        return error_response("Employee profile not found", 404)
+
     return jsonify({
         "user": current_user.serialize(),
-        "employee": current_user.employee.serialize() if current_user.employee else None,
-        "workshop": current_user.workshop.serialize() if current_user.workshop else None
+        "employee": employee.serialize(),
+        "workshop": employee.workshop.serialize() if employee.workshop else None
     }), 200
 
 
@@ -332,12 +434,13 @@ def get_me():
 def get_my_workshop():
 
     current_user = get_current_user()
+    workshop = get_current_workshop(current_user)
 
-    if not current_user or not current_user.workshop:
+    if not workshop:
         return error_response("Workshop not found", 404)
 
     return jsonify({
-        "workshop": current_user.workshop.serialize()
+        "workshop": workshop.serialize()
     }), 200
 
 
@@ -350,8 +453,21 @@ def update_my_workshop():
     if not is_admin(current_user):
         return error_response("Only admin users can update workshop data", 403)
 
-    workshop = current_user.workshop
+    workshop = get_current_workshop(current_user)
+
+    if not workshop:
+        return error_response("Workshop not found", 404)
+
     data = request.get_json() or {}
+
+    if "email" in data and data.get("email") != workshop.email:
+        existing_workshop = Workshop.query.filter(
+            Workshop.email == data.get("email"),
+            Workshop.id != workshop.id
+        ).first()
+
+        if existing_workshop:
+            return error_response("A workshop with this email already exists", 409)
 
     editable_fields = [
         "company_name",
@@ -374,7 +490,6 @@ def update_my_workshop():
         "workshop": workshop.serialize()
     }), 200
 
-
 ###---------------MECHANICS / EMPLOYEES----------------------
 
 @api.route("/mechanics", methods=["GET"])
@@ -386,16 +501,13 @@ def get_mechanics():
     if not is_admin(current_user):
         return error_response("Only admin users can see mechanics", 403)
 
-    mechanics = (
-        Employee.query
-        .join(User, Employee.user_id == User.id)
-        .filter(
-            Employee.workshop_id == current_user.workshop_id,
-            User.role == "mechanic",
-            Employee.is_active == True
-        )
-        .all()
-    )
+    workshop_id = get_current_workshop_id(current_user)
+
+    mechanics = Employee.query.filter_by(
+        workshop_id=workshop_id,
+        role="mechanic",
+        is_active=True
+    ).all()
 
     return jsonify({
         "mechanics": [mechanic.serialize() for mechanic in mechanics]
@@ -426,8 +538,8 @@ def create_mechanic():
     postal_code = data.get("postal_code")
     specialty = data.get("specialty")
 
-    if not first_name or not last_name or not phone or not email or not password:
-        return error_response("first_name, last_name, phone, email and password are required", 400)
+    if not first_name or not last_name or not dni or not phone or not email or not password:
+        return error_response("first_name, last_name, dni, phone, email and password are required", 400)
 
     if password != password_confirm:
         return error_response("Passwords do not match", 400)
@@ -437,23 +549,12 @@ def create_mechanic():
     if existing_user:
         return error_response("A user with this email already exists", 409)
 
-    if dni:
-        existing_employee = Employee.query.filter_by(dni=dni).first()
+    existing_employee = Employee.query.filter_by(dni=dni).first()
 
-        if existing_employee:
-            return error_response("An employee with this DNI already exists", 409)
+    if existing_employee:
+        return error_response("An employee with this DNI already exists", 409)
 
-    password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
-
-    mechanic_user = User(
-        email=email,
-        password_hash=password_hash,
-        role="mechanic",
-        workshop_id=current_user.workshop_id
-    )
-
-    db.session.add(mechanic_user)
-    db.session.flush()
+    workshop_id = get_current_workshop_id(current_user)
 
     mechanic_employee = Employee(
         first_name=first_name,
@@ -463,13 +564,24 @@ def create_mechanic():
         address=address,
         city=city,
         postal_code=postal_code,
+        role="mechanic",
         job_position="mechanic",
         specialty=specialty,
-        workshop_id=current_user.workshop_id,
-        user_id=mechanic_user.id
+        workshop_id=workshop_id
     )
 
     db.session.add(mechanic_employee)
+    db.session.flush()
+
+    password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
+
+    mechanic_user = User(
+        email=email,
+        password_hash=password_hash,
+        employee_id=mechanic_employee.id
+    )
+
+    db.session.add(mechanic_user)
     db.session.commit()
 
     return jsonify({
@@ -554,10 +666,6 @@ def delete_mechanic(employee_id):
         return error
 
     employee.is_active = False
-
-    if employee.user:
-        employee.user.is_active = False
-
     db.session.commit()
 
     return jsonify({
@@ -572,9 +680,10 @@ def delete_mechanic(employee_id):
 def get_customers():
 
     current_user = get_current_user()
+    workshop_id = get_current_workshop_id(current_user)
 
     customers = Customer.query.filter_by(
-        workshop_id=current_user.workshop_id,
+        workshop_id=workshop_id,
         is_active=True
     ).all()
 
@@ -593,27 +702,35 @@ def create_customer():
     first_name = data.get("first_name")
     last_name = data.get("last_name")
     dni = data.get("dni")
+    driving_license = data.get("driving_license")
     phone = data.get("phone")
     email = data.get("email")
     address = data.get("address")
 
-    if not first_name or not last_name:
-        return error_response("first_name and last_name are required", 400)
+    if not first_name or not last_name or not dni or not driving_license or not phone:
+        return error_response("first_name, last_name, dni, driving_license and phone are required", 400)
 
-    if dni:
-        existing_customer = Customer.query.filter_by(dni=dni).first()
+    existing_customer_dni = Customer.query.filter_by(dni=dni).first()
 
-        if existing_customer:
-            return error_response("A customer with this DNI already exists", 409)
+    if existing_customer_dni:
+        return error_response("A customer with this DNI already exists", 409)
+
+    existing_customer_license = Customer.query.filter_by(driving_license=driving_license).first()
+
+    if existing_customer_license:
+        return error_response("A customer with this driving license already exists", 409)
+
+    workshop_id = get_current_workshop_id(current_user)
 
     customer = Customer(
         first_name=first_name,
         last_name=last_name,
         dni=dni,
+        driving_license=driving_license,
         phone=phone,
         email=email,
         address=address,
-        workshop_id=current_user.workshop_id
+        workshop_id=workshop_id
     )
 
     db.session.add(customer)
@@ -652,10 +769,29 @@ def update_customer(customer_id):
 
     data = request.get_json() or {}
 
+    if "dni" in data and data.get("dni") != customer.dni:
+        existing_customer_dni = Customer.query.filter(
+            Customer.dni == data.get("dni"),
+            Customer.id != customer.id
+        ).first()
+
+        if existing_customer_dni:
+            return error_response("A customer with this DNI already exists", 409)
+
+    if "driving_license" in data and data.get("driving_license") != customer.driving_license:
+        existing_customer_license = Customer.query.filter(
+            Customer.driving_license == data.get("driving_license"),
+            Customer.id != customer.id
+        ).first()
+
+        if existing_customer_license:
+            return error_response("A customer with this driving license already exists", 409)
+
     editable_fields = [
         "first_name",
         "last_name",
         "dni",
+        "driving_license",
         "phone",
         "email",
         "address",
@@ -699,9 +835,10 @@ def delete_customer(customer_id):
 def get_vehicles():
 
     current_user = get_current_user()
+    workshop_id = get_current_workshop_id(current_user)
 
     vehicles = Vehicle.query.filter_by(
-        workshop_id=current_user.workshop_id,
+        workshop_id=workshop_id,
         is_active=True
     ).all()
 
@@ -744,13 +881,10 @@ def create_vehicle():
             "allowed_values": FUEL_TYPES
         }), 400
 
-    customer = Customer.query.filter_by(
-        id=customer_id,
-        workshop_id=current_user.workshop_id
-    ).first()
+    customer, error = get_customer_or_error(customer_id, current_user)
 
-    if not customer:
-        return error_response("Customer not found in this workshop", 404)
+    if error:
+        return error
 
     normalized_plate = plate.upper().strip()
 
@@ -759,11 +893,21 @@ def create_vehicle():
     if existing_vehicle:
         return error_response("A vehicle with this plate already exists", 409)
 
+    normalized_vin = vin.upper().strip() if vin else None
+
+    if normalized_vin:
+        existing_vin = Vehicle.query.filter_by(vin=normalized_vin).first()
+
+        if existing_vin:
+            return error_response("A vehicle with this VIN already exists", 409)
+
+    workshop_id = get_current_workshop_id(current_user)
+
     vehicle = Vehicle(
-        customer_id=customer_id,
-        workshop_id=current_user.workshop_id,
+        customer_id=customer.id,
+        workshop_id=workshop_id,
         plate=normalized_plate,
-        vin=vin.upper().strip() if vin else None,
+        vin=normalized_vin,
         brand=brand,
         model=model,
         version=version,
@@ -819,8 +963,34 @@ def update_vehicle(vehicle_id):
             "allowed_values": FUEL_TYPES
         }), 400
 
+    if "plate" in data and data.get("plate"):
+        normalized_plate = data.get("plate").upper().strip()
+
+        existing_vehicle_plate = Vehicle.query.filter(
+            Vehicle.plate == normalized_plate,
+            Vehicle.id != vehicle.id
+        ).first()
+
+        if existing_vehicle_plate:
+            return error_response("A vehicle with this plate already exists", 409)
+
+        vehicle.plate = normalized_plate
+
+    if "vin" in data:
+        normalized_vin = data.get("vin").upper().strip() if data.get("vin") else None
+
+        if normalized_vin and normalized_vin != vehicle.vin:
+            existing_vehicle_vin = Vehicle.query.filter(
+                Vehicle.vin == normalized_vin,
+                Vehicle.id != vehicle.id
+            ).first()
+
+            if existing_vehicle_vin:
+                return error_response("A vehicle with this VIN already exists", 409)
+
+        vehicle.vin = normalized_vin
+
     editable_fields = [
-        "vin",
         "brand",
         "model",
         "version",
@@ -836,9 +1006,6 @@ def update_vehicle(vehicle_id):
     for field in editable_fields:
         if field in data:
             setattr(vehicle, field, data[field])
-
-    if "plate" in data:
-        vehicle.plate = data.get("plate").upper().strip()
 
     if "first_registration_date" in data:
         vehicle.first_registration_date = parse_date(data.get("first_registration_date"))
@@ -876,18 +1043,17 @@ def delete_vehicle(vehicle_id):
 def get_services():
 
     current_user = get_current_user()
+    workshop_id = get_current_workshop_id(current_user)
 
     status = request.args.get("status")
     vehicle_id = request.args.get("vehicle_id", type=int)
     employee_id = request.args.get("employee_id", type=int)
 
-    query = Service.query.filter_by(workshop_id=current_user.workshop_id)
+    query = Service.query.filter_by(workshop_id=workshop_id)
 
     if is_mechanic(current_user):
-        if not current_user.employee:
-            return error_response("This mechanic user has no employee profile", 404)
-
-        query = query.filter_by(employee_id=current_user.employee.id)
+        employee = get_current_employee(current_user)
+        query = query.filter_by(employee_id=employee.id)
 
     if status:
         query = query.filter_by(status=status)
@@ -928,10 +1094,6 @@ def create_service():
     entry_mileage = data.get("entry_mileage")
     start_date = data.get("start_date")
     end_date = data.get("end_date")
-
-    parts_cost = data.get("parts_cost", 0.0)
-    labor_cost = data.get("labor_cost", 0.0)
-    labor_hours = data.get("labor_hours", 0.0)
     observations = data.get("observations")
 
     if not vehicle_id or not title or not service_type:
@@ -958,22 +1120,18 @@ def create_service():
             "allowed_values": SERVICE_PRIORITIES
         }), 400
 
-    vehicle = Vehicle.query.filter_by(
-        id=vehicle_id,
-        workshop_id=current_user.workshop_id
-    ).first()
+    vehicle, error = get_vehicle_or_error(vehicle_id, current_user)
 
-    if not vehicle:
-        return error_response("Vehicle not found in this workshop", 404)
+    if error:
+        return error
 
     if employee_id:
-        employee = Employee.query.filter_by(
-            id=employee_id,
-            workshop_id=current_user.workshop_id
-        ).first()
+        employee, error = get_employee_or_error(employee_id, current_user)
 
-        if not employee:
-            return error_response("Employee not found in this workshop", 404)
+        if error:
+            return error
+
+    workshop_id = get_current_workshop_id(current_user)
 
     service = Service(
         title=title,
@@ -984,22 +1142,31 @@ def create_service():
         entry_mileage=entry_mileage,
         start_date=parse_datetime(start_date) if start_date else datetime.now(timezone.utc),
         end_date=parse_datetime(end_date) if end_date else None,
-        parts_cost=parts_cost,
-        labor_cost=labor_cost,
-        labor_hours=labor_hours,
         observations=observations,
-        workshop_id=current_user.workshop_id,
+        workshop_id=workshop_id,
         customer_id=vehicle.customer_id,
         vehicle_id=vehicle.id,
         employee_id=employee_id
     )
 
     db.session.add(service)
+    db.session.flush()
+
+    status_log = ServiceStatusLog(
+        service_id=service.id,
+        from_status=None,
+        to_status=status,
+        employee_id=get_current_employee(current_user).id,
+        note="Service created"
+    )
+
+    db.session.add(status_log)
     db.session.commit()
 
     return jsonify({
         "message": "Service created successfully",
-        "service": service.serialize()
+        "service": service.serialize(),
+        "status_log": status_log.serialize()
     }), 201
 
 
@@ -1014,7 +1181,9 @@ def get_service_detail(service_id):
         return error
 
     if is_mechanic(current_user):
-        if not current_user.employee or service.employee_id != current_user.employee.id:
+        employee = get_current_employee(current_user)
+
+        if service.employee_id != employee.id:
             return error_response("You do not have permission to access this service", 403)
 
     return jsonify({
@@ -1035,10 +1204,9 @@ def update_service(service_id):
     data = request.get_json() or {}
 
     if is_mechanic(current_user):
-        if not current_user.employee:
-            return error_response("This mechanic user has no employee profile", 404)
+        employee = get_current_employee(current_user)
 
-        if service.employee_id != current_user.employee.id:
+        if service.employee_id != employee.id:
             return error_response("You do not have permission to update this service", 403)
 
         allowed_mechanic_fields = [
@@ -1071,6 +1239,14 @@ def update_service(service_id):
             "allowed_values": SERVICE_PRIORITIES
         }), 400
 
+    if "employee_id" in data and data.get("employee_id"):
+        employee, error = get_employee_or_error(data.get("employee_id"), current_user)
+
+        if error:
+            return error
+
+    old_status = service.status
+
     editable_fields = [
         "title",
         "description",
@@ -1078,9 +1254,6 @@ def update_service(service_id):
         "status",
         "priority",
         "entry_mileage",
-        "parts_cost",
-        "labor_cost",
-        "labor_hours",
         "observations",
         "employee_id"
     ]
@@ -1094,6 +1267,17 @@ def update_service(service_id):
 
     if "end_date" in data:
         service.end_date = parse_datetime(data.get("end_date"))
+
+    if "status" in data and data.get("status") != old_status:
+        status_log = ServiceStatusLog(
+            service_id=service.id,
+            from_status=old_status,
+            to_status=data.get("status"),
+            employee_id=get_current_employee(current_user).id,
+            note=data.get("status_note")
+        )
+
+        db.session.add(status_log)
 
     db.session.commit()
 
@@ -1117,7 +1301,14 @@ def delete_service(service_id):
     if error:
         return error
 
-    service.status = "cancelled"
+    if service.status != "cancelled":
+        create_status_log(
+            service=service,
+            employee_id=get_current_employee(current_user).id,
+            new_status="cancelled",
+            note="Service cancelled"
+        )
+
     db.session.commit()
 
     return jsonify({
@@ -1137,13 +1328,15 @@ def update_service_status(service_id):
         return error
 
     if is_mechanic(current_user):
-        if not current_user.employee or service.employee_id != current_user.employee.id:
+        employee = get_current_employee(current_user)
+
+        if service.employee_id != employee.id:
             return error_response("You do not have permission to update this service", 403)
 
     data = request.get_json() or {}
 
     new_status = data.get("status")
-    comment_text = data.get("comment")
+    note = data.get("note") or data.get("comment")
 
     if not new_status:
         return error_response("status is required", 400)
@@ -1155,13 +1348,24 @@ def update_service_status(service_id):
             "allowed_values": SERVICE_STATUSES
         }), 400
 
-    service.status = new_status
+    if new_status == service.status:
+        return jsonify({
+            "message": "Service already has this status",
+            "service": service.serialize()
+        }), 200
 
-    if comment_text:
+    status_log = create_status_log(
+        service=service,
+        employee_id=get_current_employee(current_user).id,
+        new_status=new_status,
+        note=note
+    )
+
+    if note:
         comment = ServiceComment(
             service_id=service.id,
-            user_id=current_user.id,
-            comment=comment_text,
+            employee_id=get_current_employee(current_user).id,
+            comment=note,
             comment_type="status_update"
         )
 
@@ -1171,7 +1375,36 @@ def update_service_status(service_id):
 
     return jsonify({
         "message": "Service status updated successfully",
-        "service": service.serialize()
+        "service": service.serialize(),
+        "status_log": status_log.serialize()
+    }), 200
+
+
+@api.route("/services/<int:service_id>/status-logs", methods=["GET"])
+@jwt_required()
+def get_service_status_logs(service_id):
+
+    current_user = get_current_user()
+    service, error = get_service_or_error(service_id, current_user)
+
+    if error:
+        return error
+
+    if is_mechanic(current_user):
+        employee = get_current_employee(current_user)
+
+        if service.employee_id != employee.id:
+            return error_response("You do not have permission to access this service", 403)
+
+    status_logs = (
+        ServiceStatusLog.query
+        .filter_by(service_id=service.id)
+        .order_by(ServiceStatusLog.changed_at.desc())
+        .all()
+    )
+
+    return jsonify({
+        "status_logs": [status_log.serialize() for status_log in status_logs]
     }), 200
 
 
@@ -1188,7 +1421,9 @@ def get_service_comments(service_id):
         return error
 
     if is_mechanic(current_user):
-        if not current_user.employee or service.employee_id != current_user.employee.id:
+        employee = get_current_employee(current_user)
+
+        if service.employee_id != employee.id:
             return error_response("You do not have permission to access these comments", 403)
 
     comments = (
@@ -1214,7 +1449,9 @@ def create_service_comment(service_id):
         return error
 
     if is_mechanic(current_user):
-        if not current_user.employee or service.employee_id != current_user.employee.id:
+        employee = get_current_employee(current_user)
+
+        if service.employee_id != employee.id:
             return error_response("You do not have permission to comment on this service", 403)
 
     data = request.get_json() or {}
@@ -1234,7 +1471,7 @@ def create_service_comment(service_id):
 
     comment = ServiceComment(
         service_id=service.id,
-        user_id=current_user.id,
+        employee_id=get_current_employee(current_user).id,
         comment=comment_text,
         comment_type=comment_type
     )
@@ -1259,7 +1496,9 @@ def notify_admin(service_id):
         return error
 
     if is_mechanic(current_user):
-        if not current_user.employee or service.employee_id != current_user.employee.id:
+        employee = get_current_employee(current_user)
+
+        if service.employee_id != employee.id:
             return error_response("You do not have permission to notify admin about this service", 403)
 
     data = request.get_json() or {}
@@ -1270,7 +1509,7 @@ def notify_admin(service_id):
 
     comment = ServiceComment(
         service_id=service.id,
-        user_id=current_user.id,
+        employee_id=get_current_employee(current_user).id,
         comment=message,
         comment_type="admin_alert"
     )
@@ -1295,14 +1534,14 @@ def get_my_mechanic_services():
     if not is_mechanic(current_user):
         return error_response("Only mechanic users can access this endpoint", 403)
 
-    if not current_user.employee:
-        return error_response("This mechanic user has no employee profile", 404)
+    employee = get_current_employee(current_user)
+    workshop_id = get_current_workshop_id(current_user)
 
     services = (
         Service.query
         .filter_by(
-            workshop_id=current_user.workshop_id,
-            employee_id=current_user.employee.id
+            workshop_id=workshop_id,
+            employee_id=employee.id
         )
         .order_by(Service.created_at.desc())
         .all()
@@ -1336,30 +1575,27 @@ def get_admin_dashboard():
     if not is_admin(current_user):
         return error_response("Only admin users can access this endpoint", 403)
 
+    workshop_id = get_current_workshop_id(current_user)
+
     active_vehicles = Vehicle.query.filter_by(
-        workshop_id=current_user.workshop_id,
+        workshop_id=workshop_id,
         is_active=True
     ).count()
 
-    mechanics_count = (
-        Employee.query
-        .join(User, Employee.user_id == User.id)
-        .filter(
-            Employee.workshop_id == current_user.workshop_id,
-            User.role == "mechanic",
-            Employee.is_active == True
-        )
-        .count()
-    )
+    mechanics_count = Employee.query.filter_by(
+        workshop_id=workshop_id,
+        role="mechanic",
+        is_active=True
+    ).count()
 
     budget_pending = Service.query.filter_by(
-        workshop_id=current_user.workshop_id,
+        workshop_id=workshop_id,
         status="budget_pending"
     ).count()
 
     services = (
         Service.query
-        .filter_by(workshop_id=current_user.workshop_id)
+        .filter_by(workshop_id=workshop_id)
         .order_by(Service.created_at.desc())
         .all()
     )

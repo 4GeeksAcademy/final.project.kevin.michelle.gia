@@ -1,727 +1,315 @@
-"""
-This module takes care of starting the API Server, Loading the DB and Adding the endpoints
-"""
-from flask import request, jsonify, Blueprint
-from models import db, Workshop, User, Employee
-from api.utils import APIException
+from datetime import datetime, timezone
+from flask import Blueprint, request, jsonify
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
-import json
-from datetime import datetime, date
-from flask import Blueprint, request, jsonify, url_for
 from api.models import (
-    db, User,
-    Cliente, Vehiculo, Propiedad, HistorialKilometraje,
-    Mecanico, Reparacion, ReparacionMecanico,
-    TipoMantenimiento, Mantenimiento, AuditoriaLog,
-    TipoCombustible, EstadoReparacion, EstadoMantenimiento,
+    db,
+    Workshop,
+    User,
+    Employee,
+    Customer,
+    Vehicle,
+    Service,
+    ServiceComment,
+    ServiceStatusLog
 )
-from api.utils import generate_sitemap, APIException
-from flask_cors import CORS
 
-api = Blueprint('api', __name__)
 
-CORS(api)
-
-@api.route('/hello', methods=['POST', 'GET'])
-def handle_hello():
-    response_body = {
-        "message": "Hello! I'm a message that came from the backend, check the network tab on the google inspector and you will see the GET request"
-    }
-    return jsonify(response_body), 200
-
-
-def parse_date(value):
-    
-    if not value:
-        return None
-    return datetime.strptime(value, "%Y-%m-%d").date()
-
-
-def parse_datetime(value):
-    
-    if not value:
-        return None
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
-def registrar_auditoria(tabla, registro_id, accion, anteriores=None, nuevos=None, usuario=None):
-    
-    log = AuditoriaLog(
-        tabla=tabla,
-        registro_id=registro_id,
-        accion=accion,
-        valores_anteriores=json.dumps(anteriores, default=str) if anteriores else None,
-        valores_nuevos=json.dumps(nuevos, default=str) if nuevos else None,
-        usuario=usuario,
-    )
-    db.session.add(log)
-
-@api.route('/')
-def sitemap():
-    return generate_sitemap(api)
-
-
-@api.route('/clientes', methods=['GET'])
-def listar_clientes():
-    activos = request.args.get('activos', 'true').lower() == 'true'
-    q = Cliente.query
-    if activos:
-        q = q.filter_by(activo=True)
-    return jsonify([c.serialize() for c in q.all()]), 200
-
-
-@api.route('/clientes/<int:cliente_id>', methods=['GET'])
-def obtener_cliente(cliente_id):
-    cliente = Cliente.query.get_or_404(cliente_id)
-    return jsonify(cliente.serialize()), 200
-
-
-@api.route('/clientes', methods=['POST'])
-def crear_cliente():
-    data = request.get_json() or {}
-    obligatorios = ['nombre', 'apellidos', 'dni']
-    if not all(k in data for k in obligatorios):
-        raise APIException(f"Faltan campos: {obligatorios}", status_code=400)
-
-    cliente = Cliente(
-        nombre=data['nombre'],
-        apellidos=data['apellidos'],
-        dni=data['dni'],
-        telefono=data.get('telefono'),
-        email=data.get('email'),
-        direccion=data.get('direccion'),
-    )
-    db.session.add(cliente)
-    db.session.flush()
-    registrar_auditoria("clientes", cliente.id, "CREATE", nuevos=cliente.serialize())
-    db.session.commit()
-    return jsonify(cliente.serialize()), 201
-
-
-@api.route('/clientes/<int:cliente_id>', methods=['PUT'])
-def actualizar_cliente(cliente_id):
-    cliente = Cliente.query.get_or_404(cliente_id)
-    anteriores = cliente.serialize()
-    data = request.get_json() or {}
-    for campo in ['nombre', 'apellidos', 'dni', 'telefono', 'email', 'direccion', 'activo']:
-        if campo in data:
-            setattr(cliente, campo, data[campo])
-    registrar_auditoria("clientes", cliente.id, "UPDATE",
-                        anteriores=anteriores, nuevos=cliente.serialize())
-    db.session.commit()
-    return jsonify(cliente.serialize()), 200
-
-
-@api.route('/clientes/<int:cliente_id>', methods=['DELETE'])
-def desactivar_cliente(cliente_id):
-
-    cliente = Cliente.query.get_or_404(cliente_id)
-    anteriores = cliente.serialize()
-    cliente.activo = False
-    registrar_auditoria("clientes", cliente.id, "DELETE",
-                        anteriores=anteriores, nuevos=cliente.serialize())
-    db.session.commit()
-    return jsonify({"msg": "Cliente desactivado"}), 200
-
-
-@api.route('/vehiculos', methods=['GET'])
-def listar_vehiculos():
-    activos = request.args.get('activos', 'true').lower() == 'true'
-    marca = request.args.get('marca')
-    matricula = request.args.get('matricula')
-
-    q = Vehiculo.query
-    if activos:
-        q = q.filter_by(activo=True)
-    if marca:
-        q = q.filter(Vehiculo.marca.ilike(f"%{marca}%"))
-    if matricula:
-        q = q.filter(Vehiculo.matricula.ilike(f"%{matricula}%"))
-
-    return jsonify([v.serialize() for v in q.all()]), 200
-
-
-@api.route('/vehiculos/<int:vehiculo_id>', methods=['GET'])
-def obtener_vehiculo(vehiculo_id):
-
-    vehiculo = Vehiculo.query.get_or_404(vehiculo_id)
-    return jsonify(vehiculo.serialize(incluir_historial=True)), 200
-
-
-@api.route('/vehiculos', methods=['POST'])
-def crear_vehiculo():
-    data = request.get_json() or {}
-    obligatorios = ['matricula', 'vin', 'marca', 'modelo', 'anio', 'combustible']
-    if not all(k in data for k in obligatorios):
-        raise APIException(f"Faltan campos: {obligatorios}", status_code=400)
-
-    try:
-        combustible = TipoCombustible(data['combustible'])
-    except ValueError:
-        valores = [c.value for c in TipoCombustible]
-        raise APIException(f"Combustible inválido. Opciones: {valores}", status_code=400)
-
-    vehiculo = Vehiculo(
-        matricula=data['matricula'].upper().strip(),
-        vin=data['vin'].upper().strip(),
-        marca=data['marca'],
-        modelo=data['modelo'],
-        version=data.get('version'),
-        año=data['año'],
-        combustible=combustible,
-        potencia_cv=data.get('potencia_cv'),
-        cilindrada_cc=data.get('cilindrada_cc'),
-        color=data.get('color'),
-        kilometraje_actual=data.get('kilometraje_actual', 0),
-        fecha_primera_matriculacion=parse_date(data.get('fecha_primera_matriculacion')),
-    )
-    db.session.add(vehiculo)
-    db.session.flush()
-
-
-    cliente_id = data.get('propietario_inicial_id')
-    if cliente_id:
-        Cliente.query.get_or_404(cliente_id)
-        propiedad = Propiedad(
-            vehiculo_id=vehiculo.id,
-            cliente_id=cliente_id,
-            fecha_inicio=parse_date(data.get('fecha_inicio_propiedad')) or date.today(),
-            es_actual=True,
-        )
-        db.session.add(propiedad)
-
-
-    if vehiculo.kilometraje_actual > 0:
-        db.session.add(HistorialKilometraje(
-            vehiculo_id=vehiculo.id,
-            kilometraje=vehiculo.kilometraje_actual,
-            motivo="Registro inicial",
-        ))
-
-    registrar_auditoria("vehiculos", vehiculo.id, "CREATE", nuevos=vehiculo.serialize())
-    db.session.commit()
-    return jsonify(vehiculo.serialize(incluir_historial=True)), 201
-
-
-@api.route('/vehiculos/<int:vehiculo_id>', methods=['PUT'])
-def actualizar_vehiculo(vehiculo_id):
-    
-    vehiculo = Vehiculo.query.get_or_404(vehiculo_id)
-    anteriores = vehiculo.serialize()
-    data = request.get_json() or {}
-
-    campos_simples = ['marca', 'modelo', 'version', 'año', 'potencia_cv',
-                      'cilindrada_cc', 'color', 'activo']
-    for campo in campos_simples:
-        if campo in data:
-            setattr(vehiculo, campo, data[campo])
-
-    if 'combustible' in data:
-        vehiculo.combustible = TipoCombustible(data['combustible'])
-    if 'fecha_primera_matriculacion' in data:
-        vehiculo.fecha_primera_matriculacion = parse_date(data['fecha_primera_matriculacion'])
-
-    registrar_auditoria("vehiculos", vehiculo.id, "UPDATE",
-                        anteriores=anteriores, nuevos=vehiculo.serialize())
-    db.session.commit()
-    return jsonify(vehiculo.serialize()), 200
-
-
-@api.route('/vehiculos/<int:vehiculo_id>', methods=['DELETE'])
-def desactivar_vehiculo(vehiculo_id):
-    vehiculo = Vehiculo.query.get_or_404(vehiculo_id)
-    anteriores = vehiculo.serialize()
-    vehiculo.activo = False
-    registrar_auditoria("vehiculos", vehiculo.id, "DELETE",
-                        anteriores=anteriores, nuevos=vehiculo.serialize())
-    db.session.commit()
-    return jsonify({"msg": "Vehículo desactivado"}), 200
-
-
-
-@api.route('/vehiculos/<int:vehiculo_id>/transferir', methods=['POST'])
-def transferir_vehiculo(vehiculo_id):
-    
-    vehiculo = Vehiculo.query.get_or_404(vehiculo_id)
-    data = request.get_json() or {}
-    nuevo_cliente_id = data.get('nuevo_cliente_id')
-    if not nuevo_cliente_id:
-        raise APIException("Falta nuevo_cliente_id", status_code=400)
-
-    Cliente.query.get_or_404(nuevo_cliente_id)
-    fecha_cambio = parse_date(data.get('fecha')) or date.today()
-
-
-    actual = Propiedad.query.filter_by(vehiculo_id=vehiculo_id, es_actual=True).first()
-    if actual:
-        if actual.cliente_id == nuevo_cliente_id:
-            raise APIException("Ese cliente ya es el propietario actual", status_code=400)
-        anteriores = actual.serialize()
-        actual.es_actual = False
-        actual.fecha_fin = fecha_cambio
-        registrar_auditoria("propiedades", actual.id, "UPDATE",
-            anteriores=anteriores, nuevos=actual.serialize())
-
-    nueva = Propiedad(
-        vehiculo_id=vehiculo_id,
-        cliente_id=nuevo_cliente_id,
-        fecha_inicio=fecha_cambio,
-        es_actual=True,
-        observaciones=data.get('observaciones'),
-    )
-    db.session.add(nueva)
-    db.session.flush()
-    registrar_auditoria("propiedades", nueva.id, "CREATE", nuevos=nueva.serialize())
-    db.session.commit()
-
-    return jsonify({
-        "msg": "Titularidad transferida",
-        "propiedad": nueva.serialize(),
-    }), 201
-
-@api.route('/vehiculos/<int:vehiculo_id>/kilometraje', methods=['GET'])
-def historial_kilometraje(vehiculo_id):
-    Vehiculo.query.get_or_404(vehiculo_id)
-    historial = HistorialKilometraje.query.filter_by(vehiculo_id=vehiculo_id)\
-        .order_by(HistorialKilometraje.fecha_registro.desc()).all()
-    return jsonify([h.serialize() for h in historial]), 200
-
-
-@api.route('/vehiculos/<int:vehiculo_id>/kilometraje', methods=['POST'])
-def registrar_kilometraje(vehiculo_id):
-    
-    vehiculo = Vehiculo.query.get_or_404(vehiculo_id)
-    data = request.get_json() or {}
-    km = data.get('kilometraje')
-    if km is None:
-        raise APIException("Falta kilometraje", status_code=400)
-    if km < vehiculo.kilometraje_actual:
-        raise APIException(
-            f"El kilometraje no puede ser menor al actual ({vehiculo.kilometraje_actual})",
-            status_code=400
-        )
-
-    registro = HistorialKilometraje(
-        vehiculo_id=vehiculo_id,
-        kilometraje=km,
-        motivo=data.get('motivo'),
-        registrado_por=data.get('registrado_por'),
-    )
-    anterior_km = vehiculo.kilometraje_actual
-    vehiculo.kilometraje_actual = km
-    db.session.add(registro)
-    db.session.flush()
-
-    registrar_auditoria("vehiculos", vehiculo.id, "UPDATE",
-                        anteriores={"kilometraje_actual": anterior_km},
-                        nuevos={"kilometraje_actual": km})
-    db.session.commit()
-    return jsonify(registro.serialize()), 201
-
-@api.route('/mecanicos', methods=['GET'])
-def listar_mecanicos():
-    activos = request.args.get('activos', 'true').lower() == 'true'
-    q = Mecanico.query
-    if activos:
-        q = q.filter_by(activo=True)
-    return jsonify([m.serialize() for m in q.all()]), 200
-
-
-@api.route('/mecanicos/<int:mecanico_id>', methods=['GET'])
-def obtener_mecanico(mecanico_id):
-    mecanico = Mecanico.query.get_or_404(mecanico_id)
-    return jsonify(mecanico.serialize()), 200
-
-
-@api.route('/mecanicos', methods=['POST'])
-def crear_mecanico():
-    data = request.get_json() or {}
-    if not all(k in data for k in ['nombre', 'apellidos']):
-        raise APIException("Faltan nombre y/o apellidos", status_code=400)
-
-    mecanico = Mecanico(
-        nombre=data['nombre'],
-        apellidos=data['apellidos'],
-        dni=data.get('dni'),
-        especialidad=data.get('especialidad'),
-        telefono=data.get('telefono'),
-        email=data.get('email'),
-        coste_hora=data.get('coste_hora'),
-    )
-    db.session.add(mecanico)
-    db.session.commit()
-    return jsonify(mecanico.serialize()), 201
-
-
-@api.route('/mecanicos/<int:mecanico_id>', methods=['PUT'])
-def actualizar_mecanico(mecanico_id):
-    mecanico = Mecanico.query.get_or_404(mecanico_id)
-    data = request.get_json() or {}
-    for campo in ['nombre', 'apellidos', 'dni', 'especialidad', 'telefono',
-                  'email', 'coste_hora', 'activo']:
-        if campo in data:
-            setattr(mecanico, campo, data[campo])
-    db.session.commit()
-    return jsonify(mecanico.serialize()), 200
-
-
-@api.route('/mecanicos/<int:mecanico_id>', methods=['DELETE'])
-def desactivar_mecanico(mecanico_id):
-    mecanico = Mecanico.query.get_or_404(mecanico_id)
-    mecanico.activo = False
-    db.session.commit()
-    return jsonify({"msg": "Mecánico desactivado"}), 200
-
-
-@api.route('/vehiculos/<int:vehiculo_id>/reparaciones', methods=['GET'])
-def listar_reparaciones_vehiculo(vehiculo_id):
-    Vehiculo.query.get_or_404(vehiculo_id)
-    reps = Reparacion.query.filter_by(vehiculo_id=vehiculo_id)\
-        .order_by(Reparacion.fecha_entrada.desc()).all()
-    return jsonify([r.serialize() for r in reps]), 200
-
-
-@api.route('/reparaciones/<int:reparacion_id>', methods=['GET'])
-def obtener_reparacion(reparacion_id):
-    rep = Reparacion.query.get_or_404(reparacion_id)
-    return jsonify(rep.serialize()), 200
-
-
-@api.route('/vehiculos/<int:vehiculo_id>/reparaciones', methods=['POST'])
-def crear_reparacion(vehiculo_id):
-    
-    Vehiculo.query.get_or_404(vehiculo_id)
-    data = request.get_json() or {}
-    if 'descripcion' not in data:
-        raise APIException("Falta descripcion", status_code=400)
-
-    rep = Reparacion(
-        vehiculo_id=vehiculo_id,
-        descripcion=data['descripcion'],
-        kilometraje_entrada=data.get('kilometraje_entrada'),
-        coste_repuestos=data.get('coste_repuestos', 0.0),
-        coste_mano_obra=data.get('coste_mano_obra', 0.0),
-        tiempo_mano_obra_horas=data.get('tiempo_mano_obra_horas', 0.0),
-        estado=EstadoReparacion(data.get('estado', 'pendiente')),
-        observaciones=data.get('observaciones'),
-    )
-    rep.recalcular_coste_total()
-    db.session.add(rep)
-    db.session.flush()
-
-    # Mecánicos asignados
-    for m in data.get('mecanicos', []):
-        Mecanico.query.get_or_404(m['mecanico_id'])
-        db.session.add(ReparacionMecanico(
-            reparacion_id=rep.id,
-            mecanico_id=m['mecanico_id'],
-            horas_invertidas=m.get('horas_invertidas', 0.0),
-            rol=m.get('rol'),
-        ))
-
-    registrar_auditoria("reparaciones", rep.id, "CREATE", nuevos=rep.serialize())
-    db.session.commit()
-    return jsonify(rep.serialize()), 201
-
-
-@api.route('/reparaciones/<int:reparacion_id>', methods=['PUT'])
-def actualizar_reparacion(reparacion_id):
-    rep = Reparacion.query.get_or_404(reparacion_id)
-    anteriores = rep.serialize()
-    data = request.get_json() or {}
-
-    for campo in ['descripcion', 'kilometraje_entrada', 'coste_repuestos',
-                  'coste_mano_obra', 'tiempo_mano_obra_horas', 'observaciones']:
-        if campo in data:
-            setattr(rep, campo, data[campo])
-    if 'estado' in data:
-        rep.estado = EstadoReparacion(data['estado'])
-        if rep.estado == EstadoReparacion.FINALIZADA and not rep.fecha_salida:
-            rep.fecha_salida = datetime.utcnow()
-    if 'fecha_salida' in data:
-        rep.fecha_salida = parse_datetime(data['fecha_salida'])
-
-    rep.recalcular_coste_total()
-    registrar_auditoria("reparaciones", rep.id, "UPDATE",
-                        anteriores=anteriores, nuevos=rep.serialize())
-    db.session.commit()
-    return jsonify(rep.serialize()), 200
-
-
-@api.route('/reparaciones/<int:reparacion_id>/mecanicos', methods=['POST'])
-def asignar_mecanico_reparacion(reparacion_id):
-   
-    rep = Reparacion.query.get_or_404(reparacion_id)
-    data = request.get_json() or {}
-    mecanico_id = data.get('mecanico_id')
-    if not mecanico_id:
-        raise APIException("Falta mecanico_id", status_code=400)
-    Mecanico.query.get_or_404(mecanico_id)
-
-    existente = ReparacionMecanico.query.filter_by(
-        reparacion_id=reparacion_id, mecanico_id=mecanico_id
-    ).first()
-    if existente:
-        existente.horas_invertidas = data.get('horas_invertidas', existente.horas_invertidas)
-        existente.rol = data.get('rol', existente.rol)
-    else:
-        db.session.add(ReparacionMecanico(
-            reparacion_id=reparacion_id,
-            mecanico_id=mecanico_id,
-            horas_invertidas=data.get('horas_invertidas', 0.0),
-            rol=data.get('rol'),
-        ))
-    db.session.commit()
-    return jsonify(rep.serialize()), 200
-
-@api.route('/tipos-mantenimiento', methods=['GET'])
-def listar_tipos_mantenimiento():
-    tipos = TipoMantenimiento.query.filter_by(activo=True).all()
-    return jsonify([t.serialize() for t in tipos]), 200
-
-
-@api.route('/tipos-mantenimiento', methods=['POST'])
-def crear_tipo_mantenimiento():
-    data = request.get_json() or {}
-    if 'nombre' not in data:
-        raise APIException("Falta nombre", status_code=400)
-    tipo = TipoMantenimiento(
-        nombre=data['nombre'],
-        descripcion=data.get('descripcion'),
-        intervalo_km=data.get('intervalo_km'),
-        intervalo_meses=data.get('intervalo_meses'),
-    )
-    db.session.add(tipo)
-    db.session.commit()
-    return jsonify(tipo.serialize()), 201
-
-@api.route('/vehiculos/<int:vehiculo_id>/mantenimientos', methods=['GET'])
-def listar_mantenimientos_vehiculo(vehiculo_id):
-    Vehiculo.query.get_or_404(vehiculo_id)
-    estado = request.args.get('estado')
-    q = Mantenimiento.query.filter_by(vehiculo_id=vehiculo_id)
-    if estado:
-        q = q.filter_by(estado=EstadoMantenimiento(estado))
-    mants = q.order_by(Mantenimiento.fecha_programada.asc().nullslast()).all()
-    return jsonify([m.serialize() for m in mants]), 200
-
-
-@api.route('/vehiculos/<int:vehiculo_id>/mantenimientos', methods=['POST'])
-def programar_mantenimiento(vehiculo_id):
-   
-    Vehiculo.query.get_or_404(vehiculo_id)
-    data = request.get_json() or {}
-    if 'tipo_mantenimiento_id' not in data:
-        raise APIException("Falta tipo_mantenimiento_id", status_code=400)
-
-    TipoMantenimiento.query.get_or_404(data['tipo_mantenimiento_id'])
-    if data.get('mecanico_id'):
-        Mecanico.query.get_or_404(data['mecanico_id'])
-
-    mant = Mantenimiento(
-        vehiculo_id=vehiculo_id,
-        tipo_mantenimiento_id=data['tipo_mantenimiento_id'],
-        mecanico_id=data.get('mecanico_id'),
-        fecha_programada=parse_date(data.get('fecha_programada')),
-        kilometraje_programado=data.get('kilometraje_programado'),
-        observaciones=data.get('observaciones'),
-        estado=EstadoMantenimiento(data.get('estado', 'programado')),
-    )
-    db.session.add(mant)
-    db.session.flush()
-    registrar_auditoria("mantenimientos", mant.id, "CREATE", nuevos=mant.serialize())
-    db.session.commit()
-    return jsonify(mant.serialize()), 201
-
-
-@api.route('/mantenimientos/<int:mant_id>/realizar', methods=['POST'])
-def realizar_mantenimiento(mant_id):
- 
-    mant = Mantenimiento.query.get_or_404(mant_id)
-    anteriores = mant.serialize()
-    data = request.get_json() or {}
-
-    mant.fecha_realizado = parse_date(data.get('fecha_realizado')) or date.today()
-    mant.kilometraje_realizado = data.get('kilometraje_realizado')
-    mant.coste = data.get('coste', mant.coste)
-    mant.tiempo_mano_obra_horas = data.get('tiempo_mano_obra_horas', mant.tiempo_mano_obra_horas)
-    if data.get('mecanico_id'):
-        Mecanico.query.get_or_404(data['mecanico_id'])
-        mant.mecanico_id = data['mecanico_id']
-    mant.estado = EstadoMantenimiento.REALIZADO
-
-   
-    if mant.kilometraje_realizado:
-        vehiculo = mant.vehiculo
-        if mant.kilometraje_realizado >= vehiculo.kilometraje_actual:
-            db.session.add(HistorialKilometraje(
-                vehiculo_id=vehiculo.id,
-                kilometraje=mant.kilometraje_realizado,
-                motivo=f"Mantenimiento: {mant.tipo.nombre}",
-            ))
-            vehiculo.kilometraje_actual = mant.kilometraje_realizado
-
-    registrar_auditoria("mantenimientos", mant.id, "UPDATE",
-                        anteriores=anteriores, nuevos=mant.serialize())
-    db.session.commit()
-    return jsonify(mant.serialize()), 200
-
-@api.route('/vehiculos/<int:vehiculo_id>/resumen', methods=['GET'])
-def resumen_vehiculo(vehiculo_id):
-
-    vehiculo = Vehiculo.query.get_or_404(vehiculo_id)
-    proximos = Mantenimiento.query.filter_by(
-        vehiculo_id=vehiculo_id,
-        estado=EstadoMantenimiento.PROGRAMADO
-    ).order_by(Mantenimiento.fecha_programada.asc().nullslast()).limit(5).all()
-
-    return jsonify({
-        "vehiculo": vehiculo.serialize(),
-        "kpis": {
-            "total_reparaciones": len(vehiculo.reparaciones),
-            "total_mantenimientos_realizados": sum(
-                1 for m in vehiculo.mantenimientos
-                if m.estado == EstadoMantenimiento.REALIZADO
-            ),
-            "coste_total_acumulado": vehiculo.coste_total_acumulado,
-            "horas_mano_obra_totales": vehiculo.horas_mano_obra_totales,
-        },
-        "proximos_mantenimientos": [m.serialize() for m in proximos],
-    }), 200
-
-@api.route('/auditoria', methods=['GET'])
-def listar_auditoria():
-    tabla = request.args.get('tabla')
-    registro_id = request.args.get('registro_id', type=int)
-    q = AuditoriaLog.query
-    if tabla:
-        q = q.filter_by(tabla=tabla)
-    if registro_id:
-        q = q.filter_by(registro_id=registro_id)
-    logs = q.order_by(AuditoriaLog.timestamp.desc()).limit(200).all()
-    return jsonify([l.serialize() for l in logs]), 200
-
-api = Blueprint('api', __name__)
+api = Blueprint("api", __name__)
 CORS(api)
 
 bcrypt = Bcrypt()
 
 
+###---------------OPTIONS----------------------
+
+FUEL_TYPES = [
+    "gasoline",
+    "diesel",
+    "hybrid",
+    "plug_in_hybrid",
+    "electric",
+    "lpg"
+]
+
+SERVICE_TYPES = [
+    "repair",
+    "maintenance",
+    "diagnostic",
+    "inspection",
+    "bodywork",
+    "painting",
+    "cleaning",
+    "detailing",
+    "other"
+]
+
+SERVICE_STATUSES = [
+    "pending",
+    "diagnosis",
+    "budget_pending",
+    "waiting_parts",
+    "in_repair",
+    "ready_to_deliver",
+    "delivered",
+    "cancelled"
+]
+
+SERVICE_PRIORITIES = [
+    "low",
+    "normal",
+    "high",
+    "urgent"
+]
+
+COMMENT_TYPES = [
+    "note",
+    "status_update",
+    "admin_alert"
+]
+
+
+###---------------HELPERS----------------------
+
+def error_response(message, status_code):
+
+    return jsonify({
+        "message": message,
+        "error": message
+    }), status_code
+
+
 def get_current_user():
+
     current_user_id = get_jwt_identity()
+
+    if not current_user_id:
+        return None
+
     return db.session.get(User, int(current_user_id))
 
 
-def user_belongs_to_workshop(user, workshop_id):
-    return user is not None and user.workshop_id == workshop_id
+def get_current_employee(user):
+
+    if not user:
+        return None
+
+    return user.employee
 
 
-@api.route('/hello', methods=['POST', 'GET'])
+def get_current_workshop_id(user):
+
+    employee = get_current_employee(user)
+
+    if not employee:
+        return None
+
+    return employee.workshop_id
+
+
+def get_current_workshop(user):
+
+    employee = get_current_employee(user)
+
+    if not employee:
+        return None
+
+    return employee.workshop
+
+
+def is_admin(user):
+
+    employee = get_current_employee(user)
+
+    return employee is not None and employee.role == "admin" and employee.is_active
+
+
+def is_mechanic(user):
+
+    employee = get_current_employee(user)
+
+    return employee is not None and employee.role == "mechanic" and employee.is_active
+
+
+def parse_date(value):
+
+    if not value:
+        return None
+
+    return datetime.strptime(value, "%Y-%m-%d").date()
+
+
+def parse_datetime(value):
+
+    if not value:
+        return None
+
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def create_status_log(service, employee_id, new_status, note=None):
+
+    status_log = ServiceStatusLog(
+        service_id=service.id,
+        from_status=service.status,
+        to_status=new_status,
+        employee_id=employee_id,
+        note=note
+    )
+
+    service.status = new_status
+
+    db.session.add(status_log)
+
+    return status_log
+
+
+def get_customer_or_error(customer_id, current_user):
+
+    workshop_id = get_current_workshop_id(current_user)
+
+    customer = Customer.query.filter_by(
+        id=customer_id,
+        workshop_id=workshop_id
+    ).first()
+
+    if not customer:
+        return None, error_response("Customer not found", 404)
+
+    return customer, None
+
+
+def get_vehicle_or_error(vehicle_id, current_user):
+
+    workshop_id = get_current_workshop_id(current_user)
+
+    vehicle = Vehicle.query.filter_by(
+        id=vehicle_id,
+        workshop_id=workshop_id
+    ).first()
+
+    if not vehicle:
+        return None, error_response("Vehicle not found", 404)
+
+    return vehicle, None
+
+
+def get_employee_or_error(employee_id, current_user):
+
+    workshop_id = get_current_workshop_id(current_user)
+
+    employee = Employee.query.filter_by(
+        id=employee_id,
+        workshop_id=workshop_id
+    ).first()
+
+    if not employee:
+        return None, error_response("Employee not found", 404)
+
+    return employee, None
+
+
+def get_service_or_error(service_id, current_user):
+
+    workshop_id = get_current_workshop_id(current_user)
+
+    service = Service.query.filter_by(
+        id=service_id,
+        workshop_id=workshop_id
+    ).first()
+
+    if not service:
+        return None, error_response("Service not found", 404)
+
+    return service, None
+
+
+###---------------HELLO----------------------
+
+@api.route("/hello", methods=["GET", "POST"])
 def handle_hello():
 
-    response_body = {
-        "message": "Hello! I'm a message that came from the backend, check the network tab on the google inspector and you will see the GET request"
-    }
-
-    return jsonify(response_body), 200
-
-
-##-----------------------------WORKSHOP ENDPOINTS-------------
-
-
-@api.route("/workshops", methods=["GET"])
-@jwt_required()
-def get_workshops():
-    workshops = Workshop.query.all()
-
     return jsonify({
-        "workshops": [workshop.serialize() for workshop in workshops]
+        "message": "Hello from the workshop API"
     }), 200
 
 
-@api.route("/workshops/<int:workshop_id>", methods=["GET"])
-@jwt_required()
-def get_workshop_details(workshop_id):
-    current_user = get_current_user()
+###---------------OPTIONS ENDPOINT----------------------
 
-    if not user_belongs_to_workshop(current_user, workshop_id):
-        return jsonify({
-            "message": "You do not have permission to access this workshop"
-        }), 403
-
-    workshop = db.session.get(Workshop, workshop_id)
-
-    if not workshop:
-        return jsonify({
-            "message": "Workshop not found"
-        }), 404
+@api.route("/options", methods=["GET"])
+def get_options():
 
     return jsonify({
-        "workshop": workshop.serialize()
+        "fuel_types": FUEL_TYPES,
+        "service_types": SERVICE_TYPES,
+        "service_statuses": SERVICE_STATUSES,
+        "service_priorities": SERVICE_PRIORITIES,
+        "comment_types": COMMENT_TYPES
     }), 200
 
 
-@api.route("/workshops", methods=["POST"])
-def create_workshop():
+###---------------AUTH----------------------
+
+@api.route("/register", methods=["POST"])
+def register():
+
     data = request.get_json() or {}
 
     company_name = data.get("company_name")
     cif = data.get("cif")
-    phone = data.get("phone")
-    email = data.get("email")
+
+    workshop_phone = data.get("workshop_phone") or data.get("phone")
+    workshop_email = data.get("workshop_email") or data.get("email")
+
     address = data.get("address")
     city = data.get("city")
     postal_code = data.get("postal_code")
 
-    manager_first_name = data.get("manager_first_name")
-    manager_last_name = data.get("manager_last_name")
-    manager_dni = data.get("manager_dni")
-    manager_phone = data.get("manager_phone")
-    manager_email = data.get("manager_email")
-    manager_password = data.get("manager_password")
+    first_name = data.get("first_name")
+    last_name = data.get("last_name")
+    dni = data.get("dni")
+    employee_phone = data.get("employee_phone") or data.get("admin_phone") or data.get("phone")
 
-    if not company_name or not cif or not phone or not email:
-        return jsonify({
-            "message": "company_name, cif, phone and email are required"
-        }), 400
+    user_email = data.get("user_email") or data.get("email")
+    password = data.get("password")
+    password_confirm = data.get("password_confirm")
 
-    if not manager_first_name or not manager_last_name or not manager_phone or not manager_email or not manager_password:
-        return jsonify({
-            "message": "manager_first_name, manager_last_name, manager_phone, manager_email and manager_password are required"
-        }), 400
+    if not company_name or not cif or not workshop_phone or not workshop_email:
+        return error_response("company_name, cif, workshop_phone and workshop_email are required", 400)
+
+    if not first_name or not last_name or not dni or not employee_phone:
+        return error_response("first_name, last_name, dni and employee_phone are required for the admin employee", 400)
+
+    if not user_email or not password:
+        return error_response("user_email and password are required", 400)
+
+    if password != password_confirm:
+        return error_response("Passwords do not match", 400)
 
     existing_workshop = Workshop.query.filter(
-        (Workshop.email == email) | (Workshop.cif == cif)
+        (Workshop.email == workshop_email) | (Workshop.cif == cif)
     ).first()
 
     if existing_workshop:
-        return jsonify({
-            "message": "A workshop with this email or CIF already exists"
-        }), 409
+        return error_response("A workshop with this email or CIF already exists", 409)
 
-    existing_user = User.query.filter_by(email=manager_email).first()
+    existing_employee = Employee.query.filter_by(dni=dni).first()
+
+    if existing_employee:
+        return error_response("An employee with this DNI already exists", 409)
+
+    existing_user = User.query.filter_by(email=user_email).first()
 
     if existing_user:
-        return jsonify({
-            "message": "A user with this email already exists"
-        }), 409
-
-    if manager_dni:
-        existing_employee_dni = Employee.query.filter_by(dni=manager_dni).first()
-
-        if existing_employee_dni:
-            return jsonify({
-                "message": "An employee with this DNI already exists"
-            }), 409
+        return error_response("A user with this email already exists", 409)
 
     new_workshop = Workshop(
         company_name=company_name,
         cif=cif,
-        phone=phone,
-        email=email,
+        phone=workshop_phone,
+        email=workshop_email,
         address=address,
         city=city,
         postal_code=postal_code
@@ -730,140 +318,212 @@ def create_workshop():
     db.session.add(new_workshop)
     db.session.flush()
 
-    password_hash = bcrypt.generate_password_hash(manager_password).decode("utf-8")
-
-    manager_user = User(
-        email=manager_email,
-        password_hash=password_hash,
-        role="gerente",
+    admin_employee = Employee(
+        first_name=first_name,
+        last_name=last_name,
+        dni=dni,
+        phone=employee_phone,
+        role="admin",
+        job_position="admin",
         workshop_id=new_workshop.id
     )
 
-    db.session.add(manager_user)
+    db.session.add(admin_employee)
     db.session.flush()
 
-    manager_employee = Employee(
-        first_name=manager_first_name,
-        last_name=manager_last_name,
-        dni=manager_dni,
-        phone=manager_phone,
-        workshop_id=new_workshop.id,
-        user_id=manager_user.id
+    password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
+
+    admin_user = User(
+        email=user_email,
+        password_hash=password_hash,
+        employee_id=admin_employee.id
     )
 
-    db.session.add(manager_employee)
+    db.session.add(admin_user)
     db.session.commit()
 
+    token = create_access_token(
+        identity=str(admin_user.id),
+        additional_claims={
+            "role": admin_employee.role,
+            "workshop_id": admin_employee.workshop_id,
+            "employee_id": admin_employee.id
+        }
+    )
+
     return jsonify({
-        "message": "Workshop, manager user and manager employee created successfully",
+        "message": "Workshop created successfully",
+        "token": token,
         "workshop": new_workshop.serialize(),
-        "user": manager_user.serialize(),
-        "employee": manager_employee.serialize()
+        "user": admin_user.serialize(),
+        "employee": admin_employee.serialize()
     }), 201
 
 
-# ---------------------- USER LOGIN ENDPOINT ----------------------
-
-
 @api.route("/login", methods=["POST"])
-@api.route("/users/login", methods=["POST"])
-def login_user():
+def login():
+
     data = request.get_json() or {}
 
     email = data.get("email")
     password = data.get("password")
 
     if not email or not password:
-        return jsonify({
-            "message": "email and password are required"
-        }), 400
+        return error_response("email and password are required", 400)
 
     user = User.query.filter_by(email=email).first()
 
     if not user:
-        return jsonify({
-            "message": "Invalid email or password"
-        }), 401
+        return error_response("Invalid email or password", 401)
 
-    if not user.is_active:
-        return jsonify({
-            "message": "This user account is inactive"
-        }), 403
+    employee = user.employee
+
+    if not employee:
+        return error_response("This user account has no employee profile", 403)
+
+    if not employee.is_active:
+        return error_response("This employee account is inactive", 403)
 
     is_valid_password = bcrypt.check_password_hash(user.password_hash, password)
 
     if not is_valid_password:
-        return jsonify({
-            "message": "Invalid email or password"
-        }), 401
+        return error_response("Invalid email or password", 401)
 
-    access_token = create_access_token(
+    token = create_access_token(
         identity=str(user.id),
         additional_claims={
-            "role": user.role,
-            "workshop_id": user.workshop_id
+            "role": employee.role,
+            "workshop_id": employee.workshop_id,
+            "employee_id": employee.id
         }
     )
 
     return jsonify({
         "message": "Login successful",
-        "token": access_token,
+        "token": token,
         "user": user.serialize(),
-        "employee": user.employee.serialize() if user.employee else None
+        "employee": employee.serialize()
     }), 200
 
 
-# ---------------------- EMPLOYEE ENDPOINTS ----------------------
-
-
-@api.route("/workshops/<int:workshop_id>/employees", methods=["GET"])
+@api.route("/me", methods=["GET"])
 @jwt_required()
-def get_workshop_employees(workshop_id):
+def get_me():
+
     current_user = get_current_user()
 
-    if not user_belongs_to_workshop(current_user, workshop_id):
-        return jsonify({
-            "message": "You do not have permission to access these employees"
-        }), 403
+    if not current_user:
+        return error_response("User not found", 404)
 
-    workshop = db.session.get(Workshop, workshop_id)
+    employee = current_user.employee
 
-    if not workshop:
-        return jsonify({
-            "message": "Workshop not found"
-        }), 404
-
-    employees = Employee.query.filter_by(workshop_id=workshop_id).all()
+    if not employee:
+        return error_response("Employee profile not found", 404)
 
     return jsonify({
-        "workshop": workshop.serialize(),
-        "employees": [employee.serialize() for employee in employees]
+        "user": current_user.serialize(),
+        "employee": employee.serialize(),
+        "workshop": employee.workshop.serialize() if employee.workshop else None
     }), 200
 
 
-@api.route("/workshops/<int:workshop_id>/employees", methods=["POST"])
+###---------------WORKSHOP----------------------
+
+@api.route("/workshop", methods=["GET"])
 @jwt_required()
-def create_employee(workshop_id):
+def get_my_workshop():
+
+    current_user = get_current_user()
+    workshop = get_current_workshop(current_user)
+
+    if not workshop:
+        return error_response("Workshop not found", 404)
+
+    return jsonify({
+        "workshop": workshop.serialize()
+    }), 200
+
+
+@api.route("/workshop", methods=["PUT"])
+@jwt_required()
+def update_my_workshop():
+
     current_user = get_current_user()
 
-    if not user_belongs_to_workshop(current_user, workshop_id):
-        return jsonify({
-            "message": "You do not have permission to create employees in this workshop"
-        }), 403
+    if not is_admin(current_user):
+        return error_response("Only admin users can update workshop data", 403)
 
-    if current_user.role not in ["gerente", "administrador"]:
-        return jsonify({
-            "message": "Only gerente or administrador can create employees"
-        }), 403
+    workshop = get_current_workshop(current_user)
+
+    if not workshop:
+        return error_response("Workshop not found", 404)
 
     data = request.get_json() or {}
 
-    workshop = db.session.get(Workshop, workshop_id)
+    if "email" in data and data.get("email") != workshop.email:
+        existing_workshop = Workshop.query.filter(
+            Workshop.email == data.get("email"),
+            Workshop.id != workshop.id
+        ).first()
 
-    if not workshop:
-        return jsonify({
-            "message": "Workshop not found"
-        }), 404
+        if existing_workshop:
+            return error_response("A workshop with this email already exists", 409)
+
+    editable_fields = [
+        "company_name",
+        "phone",
+        "email",
+        "address",
+        "city",
+        "postal_code",
+        "is_active"
+    ]
+
+    for field in editable_fields:
+        if field in data:
+            setattr(workshop, field, data[field])
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Workshop updated successfully",
+        "workshop": workshop.serialize()
+    }), 200
+
+###---------------MECHANICS / EMPLOYEES----------------------
+
+@api.route("/mechanics", methods=["GET"])
+@jwt_required()
+def get_mechanics():
+
+    current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can see mechanics", 403)
+
+    workshop_id = get_current_workshop_id(current_user)
+
+    mechanics = Employee.query.filter_by(
+        workshop_id=workshop_id,
+        role="mechanic",
+        is_active=True
+    ).all()
+
+    return jsonify({
+        "mechanics": [mechanic.serialize() for mechanic in mechanics]
+    }), 200
+
+
+@api.route("/mechanics", methods=["POST"])
+@jwt_required()
+def create_mechanic():
+
+    current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can create mechanics", 403)
+
+    data = request.get_json() or {}
 
     first_name = data.get("first_name")
     last_name = data.get("last_name")
@@ -871,94 +531,1088 @@ def create_employee(workshop_id):
     phone = data.get("phone")
     email = data.get("email")
     password = data.get("password")
-    role = data.get("role")
+    password_confirm = data.get("password_confirm")
 
-    allowed_roles = ["coordinador", "mecanico"]
+    address = data.get("address")
+    city = data.get("city")
+    postal_code = data.get("postal_code")
+    specialty = data.get("specialty")
 
-    if role not in allowed_roles:
-        return jsonify({
-            "message": "Role must be coordinador or mecanico"
-        }), 400
+    if not first_name or not last_name or not dni or not phone or not email or not password:
+        return error_response("first_name, last_name, dni, phone, email and password are required", 400)
 
-    if not first_name or not last_name or not phone or not email or not password:
-        return jsonify({
-            "message": "first_name, last_name, phone, email and password are required"
-        }), 400
+    if password != password_confirm:
+        return error_response("Passwords do not match", 400)
 
     existing_user = User.query.filter_by(email=email).first()
 
     if existing_user:
-        return jsonify({
-            "message": "A user with this email already exists"
-        }), 409
+        return error_response("A user with this email already exists", 409)
 
-    if dni:
-        existing_employee_dni = Employee.query.filter_by(dni=dni).first()
+    existing_employee = Employee.query.filter_by(dni=dni).first()
 
-        if existing_employee_dni:
-            return jsonify({
-                "message": "An employee with this DNI already exists"
-            }), 409
+    if existing_employee:
+        return error_response("An employee with this DNI already exists", 409)
 
-    password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
+    workshop_id = get_current_workshop_id(current_user)
 
-    new_user = User(
-        email=email,
-        password_hash=password_hash,
-        role=role,
-        workshop_id=workshop_id
-    )
-
-    db.session.add(new_user)
-    db.session.flush()
-
-    new_employee = Employee(
+    mechanic_employee = Employee(
         first_name=first_name,
         last_name=last_name,
         dni=dni,
         phone=phone,
-        workshop_id=workshop_id,
-        user_id=new_user.id
+        address=address,
+        city=city,
+        postal_code=postal_code,
+        role="mechanic",
+        job_position="mechanic",
+        specialty=specialty,
+        workshop_id=workshop_id
     )
 
-    db.session.add(new_employee)
+    db.session.add(mechanic_employee)
+    db.session.flush()
+
+    password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
+
+    mechanic_user = User(
+        email=email,
+        password_hash=password_hash,
+        employee_id=mechanic_employee.id
+    )
+
+    db.session.add(mechanic_user)
     db.session.commit()
 
     return jsonify({
-        "message": "Employee user and employee profile created successfully",
-        "user": new_user.serialize(),
-        "employee": new_employee.serialize()
+        "message": "Mechanic created successfully",
+        "user": mechanic_user.serialize(),
+        "employee": mechanic_employee.serialize()
     }), 201
 
 
-@api.route("/workshops/<int:workshop_id>/employees/<int:employee_id>", methods=["GET"])
+@api.route("/mechanics/<int:employee_id>", methods=["GET"])
 @jwt_required()
-def get_employee_detail(workshop_id, employee_id):
+def get_mechanic_detail(employee_id):
+
     current_user = get_current_user()
 
-    if not user_belongs_to_workshop(current_user, workshop_id):
-        return jsonify({
-            "message": "You do not have permission to access this employee"
-        }), 403
+    if not is_admin(current_user):
+        return error_response("Only admin users can see mechanic details", 403)
 
-    workshop = db.session.get(Workshop, workshop_id)
+    employee, error = get_employee_or_error(employee_id, current_user)
 
-    if not workshop:
-        return jsonify({
-            "message": "Workshop not found"
-        }), 404
-
-    employee = Employee.query.filter_by(
-        id=employee_id,
-        workshop_id=workshop_id
-    ).first()
-
-    if not employee:
-        return jsonify({
-            "message": "Employee not found in this workshop"
-        }), 404
+    if error:
+        return error
 
     return jsonify({
-        "employee": employee.serialize()
+        "mechanic": employee.serialize()
     }), 200
 
+
+@api.route("/mechanics/<int:employee_id>", methods=["PUT"])
+@jwt_required()
+def update_mechanic(employee_id):
+
+    current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can update mechanics", 403)
+
+    employee, error = get_employee_or_error(employee_id, current_user)
+
+    if error:
+        return error
+
+    data = request.get_json() or {}
+
+    editable_fields = [
+        "first_name",
+        "last_name",
+        "dni",
+        "phone",
+        "address",
+        "city",
+        "postal_code",
+        "job_position",
+        "specialty",
+        "is_active"
+    ]
+
+    for field in editable_fields:
+        if field in data:
+            setattr(employee, field, data[field])
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Mechanic updated successfully",
+        "mechanic": employee.serialize()
+    }), 200
+
+
+@api.route("/mechanics/<int:employee_id>", methods=["DELETE"])
+@jwt_required()
+def delete_mechanic(employee_id):
+
+    current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can delete mechanics", 403)
+
+    employee, error = get_employee_or_error(employee_id, current_user)
+
+    if error:
+        return error
+
+    employee.is_active = False
+    db.session.commit()
+
+    return jsonify({
+        "message": "Mechanic deactivated successfully"
+    }), 200
+
+
+###---------------CUSTOMERS----------------------
+
+@api.route("/customers", methods=["GET"])
+@jwt_required()
+def get_customers():
+
+    current_user = get_current_user()
+    workshop_id = get_current_workshop_id(current_user)
+
+    customers = Customer.query.filter_by(
+        workshop_id=workshop_id,
+        is_active=True
+    ).all()
+
+    return jsonify({
+        "customers": [customer.serialize() for customer in customers]
+    }), 200
+
+
+@api.route("/customers", methods=["POST"])
+@jwt_required()
+def create_customer():
+
+    current_user = get_current_user()
+    data = request.get_json() or {}
+
+    first_name = data.get("first_name")
+    last_name = data.get("last_name")
+    dni = data.get("dni")
+    driving_license = data.get("driving_license")
+    phone = data.get("phone")
+    email = data.get("email")
+    address = data.get("address")
+
+    if not first_name or not last_name or not dni or not driving_license or not phone:
+        return error_response("first_name, last_name, dni, driving_license and phone are required", 400)
+
+    existing_customer_dni = Customer.query.filter_by(dni=dni).first()
+
+    if existing_customer_dni:
+        return error_response("A customer with this DNI already exists", 409)
+
+    existing_customer_license = Customer.query.filter_by(driving_license=driving_license).first()
+
+    if existing_customer_license:
+        return error_response("A customer with this driving license already exists", 409)
+
+    workshop_id = get_current_workshop_id(current_user)
+
+    customer = Customer(
+        first_name=first_name,
+        last_name=last_name,
+        dni=dni,
+        driving_license=driving_license,
+        phone=phone,
+        email=email,
+        address=address,
+        workshop_id=workshop_id
+    )
+
+    db.session.add(customer)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Customer created successfully",
+        "customer": customer.serialize()
+    }), 201
+
+
+@api.route("/customers/<int:customer_id>", methods=["GET"])
+@jwt_required()
+def get_customer_detail(customer_id):
+
+    current_user = get_current_user()
+    customer, error = get_customer_or_error(customer_id, current_user)
+
+    if error:
+        return error
+
+    return jsonify({
+        "customer": customer.serialize()
+    }), 200
+
+
+@api.route("/customers/<int:customer_id>", methods=["PUT"])
+@jwt_required()
+def update_customer(customer_id):
+
+    current_user = get_current_user()
+    customer, error = get_customer_or_error(customer_id, current_user)
+
+    if error:
+        return error
+
+    data = request.get_json() or {}
+
+    if "dni" in data and data.get("dni") != customer.dni:
+        existing_customer_dni = Customer.query.filter(
+            Customer.dni == data.get("dni"),
+            Customer.id != customer.id
+        ).first()
+
+        if existing_customer_dni:
+            return error_response("A customer with this DNI already exists", 409)
+
+    if "driving_license" in data and data.get("driving_license") != customer.driving_license:
+        existing_customer_license = Customer.query.filter(
+            Customer.driving_license == data.get("driving_license"),
+            Customer.id != customer.id
+        ).first()
+
+        if existing_customer_license:
+            return error_response("A customer with this driving license already exists", 409)
+
+    editable_fields = [
+        "first_name",
+        "last_name",
+        "dni",
+        "driving_license",
+        "phone",
+        "email",
+        "address",
+        "is_active"
+    ]
+
+    for field in editable_fields:
+        if field in data:
+            setattr(customer, field, data[field])
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Customer updated successfully",
+        "customer": customer.serialize()
+    }), 200
+
+
+@api.route("/customers/<int:customer_id>", methods=["DELETE"])
+@jwt_required()
+def delete_customer(customer_id):
+
+    current_user = get_current_user()
+    customer, error = get_customer_or_error(customer_id, current_user)
+
+    if error:
+        return error
+
+    customer.is_active = False
+    db.session.commit()
+
+    return jsonify({
+        "message": "Customer deactivated successfully"
+    }), 200
+
+
+###---------------VEHICLES----------------------
+
+@api.route("/vehicles", methods=["GET"])
+@jwt_required()
+def get_vehicles():
+
+    current_user = get_current_user()
+    workshop_id = get_current_workshop_id(current_user)
+
+    vehicles = Vehicle.query.filter_by(
+        workshop_id=workshop_id,
+        is_active=True
+    ).all()
+
+    return jsonify({
+        "vehicles": [vehicle.serialize() for vehicle in vehicles]
+    }), 200
+
+
+@api.route("/vehicles", methods=["POST"])
+@jwt_required()
+def create_vehicle():
+
+    current_user = get_current_user()
+    data = request.get_json() or {}
+
+    customer_id = data.get("customer_id")
+    plate = data.get("plate")
+    vin = data.get("vin")
+
+    brand = data.get("brand")
+    model = data.get("model")
+    version = data.get("version")
+    year = data.get("year")
+
+    fuel_type = data.get("fuel_type")
+    power_hp = data.get("power_hp")
+    engine_cc = data.get("engine_cc")
+    color = data.get("color")
+
+    mileage = data.get("mileage", 0)
+    first_registration_date = data.get("first_registration_date")
+
+    if not customer_id or not plate or not brand or not model or not fuel_type:
+        return error_response("customer_id, plate, brand, model and fuel_type are required", 400)
+
+    if fuel_type not in FUEL_TYPES:
+        return jsonify({
+            "message": "Invalid fuel_type",
+            "error": "Invalid fuel_type",
+            "allowed_values": FUEL_TYPES
+        }), 400
+
+    customer, error = get_customer_or_error(customer_id, current_user)
+
+    if error:
+        return error
+
+    normalized_plate = plate.upper().strip()
+
+    existing_vehicle = Vehicle.query.filter_by(plate=normalized_plate).first()
+
+    if existing_vehicle:
+        return error_response("A vehicle with this plate already exists", 409)
+
+    normalized_vin = vin.upper().strip() if vin else None
+
+    if normalized_vin:
+        existing_vin = Vehicle.query.filter_by(vin=normalized_vin).first()
+
+        if existing_vin:
+            return error_response("A vehicle with this VIN already exists", 409)
+
+    workshop_id = get_current_workshop_id(current_user)
+
+    vehicle = Vehicle(
+        customer_id=customer.id,
+        workshop_id=workshop_id,
+        plate=normalized_plate,
+        vin=normalized_vin,
+        brand=brand,
+        model=model,
+        version=version,
+        year=year,
+        fuel_type=fuel_type,
+        power_hp=power_hp,
+        engine_cc=engine_cc,
+        color=color,
+        mileage=mileage or 0,
+        first_registration_date=parse_date(first_registration_date)
+    )
+
+    db.session.add(vehicle)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Vehicle created successfully",
+        "vehicle": vehicle.serialize()
+    }), 201
+
+
+@api.route("/vehicles/<int:vehicle_id>", methods=["GET"])
+@jwt_required()
+def get_vehicle_detail(vehicle_id):
+
+    current_user = get_current_user()
+    vehicle, error = get_vehicle_or_error(vehicle_id, current_user)
+
+    if error:
+        return error
+
+    return jsonify({
+        "vehicle": vehicle.serialize()
+    }), 200
+
+
+@api.route("/vehicles/<int:vehicle_id>", methods=["PUT"])
+@jwt_required()
+def update_vehicle(vehicle_id):
+
+    current_user = get_current_user()
+    vehicle, error = get_vehicle_or_error(vehicle_id, current_user)
+
+    if error:
+        return error
+
+    data = request.get_json() or {}
+
+    if "fuel_type" in data and data.get("fuel_type") not in FUEL_TYPES:
+        return jsonify({
+            "message": "Invalid fuel_type",
+            "error": "Invalid fuel_type",
+            "allowed_values": FUEL_TYPES
+        }), 400
+
+    if "plate" in data and data.get("plate"):
+        normalized_plate = data.get("plate").upper().strip()
+
+        existing_vehicle_plate = Vehicle.query.filter(
+            Vehicle.plate == normalized_plate,
+            Vehicle.id != vehicle.id
+        ).first()
+
+        if existing_vehicle_plate:
+            return error_response("A vehicle with this plate already exists", 409)
+
+        vehicle.plate = normalized_plate
+
+    if "vin" in data:
+        normalized_vin = data.get("vin").upper().strip() if data.get("vin") else None
+
+        if normalized_vin and normalized_vin != vehicle.vin:
+            existing_vehicle_vin = Vehicle.query.filter(
+                Vehicle.vin == normalized_vin,
+                Vehicle.id != vehicle.id
+            ).first()
+
+            if existing_vehicle_vin:
+                return error_response("A vehicle with this VIN already exists", 409)
+
+        vehicle.vin = normalized_vin
+
+    editable_fields = [
+        "brand",
+        "model",
+        "version",
+        "year",
+        "fuel_type",
+        "power_hp",
+        "engine_cc",
+        "color",
+        "mileage",
+        "is_active"
+    ]
+
+    for field in editable_fields:
+        if field in data:
+            setattr(vehicle, field, data[field])
+
+    if "first_registration_date" in data:
+        vehicle.first_registration_date = parse_date(data.get("first_registration_date"))
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Vehicle updated successfully",
+        "vehicle": vehicle.serialize()
+    }), 200
+
+
+@api.route("/vehicles/<int:vehicle_id>", methods=["DELETE"])
+@jwt_required()
+def delete_vehicle(vehicle_id):
+
+    current_user = get_current_user()
+    vehicle, error = get_vehicle_or_error(vehicle_id, current_user)
+
+    if error:
+        return error
+
+    vehicle.is_active = False
+    db.session.commit()
+
+    return jsonify({
+        "message": "Vehicle deactivated successfully"
+    }), 200
+
+
+###---------------SERVICES----------------------
+
+@api.route("/services", methods=["GET"])
+@jwt_required()
+def get_services():
+
+    current_user = get_current_user()
+    workshop_id = get_current_workshop_id(current_user)
+
+    status = request.args.get("status")
+    vehicle_id = request.args.get("vehicle_id", type=int)
+    employee_id = request.args.get("employee_id", type=int)
+
+    query = Service.query.filter_by(workshop_id=workshop_id)
+
+    if is_mechanic(current_user):
+        employee = get_current_employee(current_user)
+        query = query.filter_by(employee_id=employee.id)
+
+    if status:
+        query = query.filter_by(status=status)
+
+    if vehicle_id:
+        query = query.filter_by(vehicle_id=vehicle_id)
+
+    if employee_id and is_admin(current_user):
+        query = query.filter_by(employee_id=employee_id)
+
+    services = query.order_by(Service.created_at.desc()).all()
+
+    return jsonify({
+        "services": [service.serialize() for service in services]
+    }), 200
+
+
+@api.route("/services", methods=["POST"])
+@jwt_required()
+def create_service():
+
+    current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can create services", 403)
+
+    data = request.get_json() or {}
+
+    vehicle_id = data.get("vehicle_id")
+    employee_id = data.get("employee_id")
+
+    title = data.get("title")
+    description = data.get("description")
+    service_type = data.get("service_type")
+    status = data.get("status", "pending")
+    priority = data.get("priority", "normal")
+
+    entry_mileage = data.get("entry_mileage")
+    start_date = data.get("start_date")
+    end_date = data.get("end_date")
+    observations = data.get("observations")
+
+    if not vehicle_id or not title or not service_type:
+        return error_response("vehicle_id, title and service_type are required", 400)
+
+    if service_type not in SERVICE_TYPES:
+        return jsonify({
+            "message": "Invalid service_type",
+            "error": "Invalid service_type",
+            "allowed_values": SERVICE_TYPES
+        }), 400
+
+    if status not in SERVICE_STATUSES:
+        return jsonify({
+            "message": "Invalid status",
+            "error": "Invalid status",
+            "allowed_values": SERVICE_STATUSES
+        }), 400
+
+    if priority not in SERVICE_PRIORITIES:
+        return jsonify({
+            "message": "Invalid priority",
+            "error": "Invalid priority",
+            "allowed_values": SERVICE_PRIORITIES
+        }), 400
+
+    vehicle, error = get_vehicle_or_error(vehicle_id, current_user)
+
+    if error:
+        return error
+
+    if employee_id:
+        employee, error = get_employee_or_error(employee_id, current_user)
+
+        if error:
+            return error
+
+    workshop_id = get_current_workshop_id(current_user)
+
+    service = Service(
+        title=title,
+        description=description,
+        service_type=service_type,
+        status=status,
+        priority=priority,
+        entry_mileage=entry_mileage,
+        start_date=parse_datetime(start_date) if start_date else datetime.now(timezone.utc),
+        end_date=parse_datetime(end_date) if end_date else None,
+        observations=observations,
+        workshop_id=workshop_id,
+        customer_id=vehicle.customer_id,
+        vehicle_id=vehicle.id,
+        employee_id=employee_id
+    )
+
+    db.session.add(service)
+    db.session.flush()
+
+    status_log = ServiceStatusLog(
+        service_id=service.id,
+        from_status=None,
+        to_status=status,
+        employee_id=get_current_employee(current_user).id,
+        note="Service created"
+    )
+
+    db.session.add(status_log)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Service created successfully",
+        "service": service.serialize(),
+        "status_log": status_log.serialize()
+    }), 201
+
+
+@api.route("/services/<int:service_id>", methods=["GET"])
+@jwt_required()
+def get_service_detail(service_id):
+
+    current_user = get_current_user()
+    service, error = get_service_or_error(service_id, current_user)
+
+    if error:
+        return error
+
+    if is_mechanic(current_user):
+        employee = get_current_employee(current_user)
+
+        if service.employee_id != employee.id:
+            return error_response("You do not have permission to access this service", 403)
+
+    return jsonify({
+        "service": service.serialize()
+    }), 200
+
+
+@api.route("/services/<int:service_id>", methods=["PUT"])
+@jwt_required()
+def update_service(service_id):
+
+    current_user = get_current_user()
+    service, error = get_service_or_error(service_id, current_user)
+
+    if error:
+        return error
+
+    data = request.get_json() or {}
+
+    if is_mechanic(current_user):
+        employee = get_current_employee(current_user)
+
+        if service.employee_id != employee.id:
+            return error_response("You do not have permission to update this service", 403)
+
+        allowed_mechanic_fields = [
+            "status",
+            "observations"
+        ]
+
+        for field in data:
+            if field not in allowed_mechanic_fields:
+                return error_response("Mechanics can only update status and observations", 403)
+
+    if "service_type" in data and data.get("service_type") not in SERVICE_TYPES:
+        return jsonify({
+            "message": "Invalid service_type",
+            "error": "Invalid service_type",
+            "allowed_values": SERVICE_TYPES
+        }), 400
+
+    if "status" in data and data.get("status") not in SERVICE_STATUSES:
+        return jsonify({
+            "message": "Invalid status",
+            "error": "Invalid status",
+            "allowed_values": SERVICE_STATUSES
+        }), 400
+
+    if "priority" in data and data.get("priority") not in SERVICE_PRIORITIES:
+        return jsonify({
+            "message": "Invalid priority",
+            "error": "Invalid priority",
+            "allowed_values": SERVICE_PRIORITIES
+        }), 400
+
+    if "employee_id" in data and data.get("employee_id"):
+        employee, error = get_employee_or_error(data.get("employee_id"), current_user)
+
+        if error:
+            return error
+
+    old_status = service.status
+
+    editable_fields = [
+        "title",
+        "description",
+        "service_type",
+        "status",
+        "priority",
+        "entry_mileage",
+        "observations",
+        "employee_id"
+    ]
+
+    for field in editable_fields:
+        if field in data:
+            setattr(service, field, data[field])
+
+    if "start_date" in data:
+        service.start_date = parse_datetime(data.get("start_date"))
+
+    if "end_date" in data:
+        service.end_date = parse_datetime(data.get("end_date"))
+
+    if "status" in data and data.get("status") != old_status:
+        status_log = ServiceStatusLog(
+            service_id=service.id,
+            from_status=old_status,
+            to_status=data.get("status"),
+            employee_id=get_current_employee(current_user).id,
+            note=data.get("status_note")
+        )
+
+        db.session.add(status_log)
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Service updated successfully",
+        "service": service.serialize()
+    }), 200
+
+
+@api.route("/services/<int:service_id>", methods=["DELETE"])
+@jwt_required()
+def delete_service(service_id):
+
+    current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can cancel services", 403)
+
+    service, error = get_service_or_error(service_id, current_user)
+
+    if error:
+        return error
+
+    if service.status != "cancelled":
+        create_status_log(
+            service=service,
+            employee_id=get_current_employee(current_user).id,
+            new_status="cancelled",
+            note="Service cancelled"
+        )
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Service cancelled successfully",
+        "service": service.serialize()
+    }), 200
+
+
+@api.route("/services/<int:service_id>/status", methods=["PATCH"])
+@jwt_required()
+def update_service_status(service_id):
+
+    current_user = get_current_user()
+    service, error = get_service_or_error(service_id, current_user)
+
+    if error:
+        return error
+
+    if is_mechanic(current_user):
+        employee = get_current_employee(current_user)
+
+        if service.employee_id != employee.id:
+            return error_response("You do not have permission to update this service", 403)
+
+    data = request.get_json() or {}
+
+    new_status = data.get("status")
+    note = data.get("note") or data.get("comment")
+
+    if not new_status:
+        return error_response("status is required", 400)
+
+    if new_status not in SERVICE_STATUSES:
+        return jsonify({
+            "message": "Invalid status",
+            "error": "Invalid status",
+            "allowed_values": SERVICE_STATUSES
+        }), 400
+
+    if new_status == service.status:
+        return jsonify({
+            "message": "Service already has this status",
+            "service": service.serialize()
+        }), 200
+
+    status_log = create_status_log(
+        service=service,
+        employee_id=get_current_employee(current_user).id,
+        new_status=new_status,
+        note=note
+    )
+
+    if note:
+        comment = ServiceComment(
+            service_id=service.id,
+            employee_id=get_current_employee(current_user).id,
+            comment=note,
+            comment_type="status_update"
+        )
+
+        db.session.add(comment)
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Service status updated successfully",
+        "service": service.serialize(),
+        "status_log": status_log.serialize()
+    }), 200
+
+
+@api.route("/services/<int:service_id>/status-logs", methods=["GET"])
+@jwt_required()
+def get_service_status_logs(service_id):
+
+    current_user = get_current_user()
+    service, error = get_service_or_error(service_id, current_user)
+
+    if error:
+        return error
+
+    if is_mechanic(current_user):
+        employee = get_current_employee(current_user)
+
+        if service.employee_id != employee.id:
+            return error_response("You do not have permission to access this service", 403)
+
+    status_logs = (
+        ServiceStatusLog.query
+        .filter_by(service_id=service.id)
+        .order_by(ServiceStatusLog.changed_at.desc())
+        .all()
+    )
+
+    return jsonify({
+        "status_logs": [status_log.serialize() for status_log in status_logs]
+    }), 200
+
+
+###---------------SERVICE COMMENTS----------------------
+
+@api.route("/services/<int:service_id>/comments", methods=["GET"])
+@jwt_required()
+def get_service_comments(service_id):
+
+    current_user = get_current_user()
+    service, error = get_service_or_error(service_id, current_user)
+
+    if error:
+        return error
+
+    if is_mechanic(current_user):
+        employee = get_current_employee(current_user)
+
+        if service.employee_id != employee.id:
+            return error_response("You do not have permission to access these comments", 403)
+
+    comments = (
+        ServiceComment.query
+        .filter_by(service_id=service.id)
+        .order_by(ServiceComment.created_at.desc())
+        .all()
+    )
+
+    return jsonify({
+        "comments": [comment.serialize() for comment in comments]
+    }), 200
+
+
+@api.route("/services/<int:service_id>/comments", methods=["POST"])
+@jwt_required()
+def create_service_comment(service_id):
+
+    current_user = get_current_user()
+    service, error = get_service_or_error(service_id, current_user)
+
+    if error:
+        return error
+
+    if is_mechanic(current_user):
+        employee = get_current_employee(current_user)
+
+        if service.employee_id != employee.id:
+            return error_response("You do not have permission to comment on this service", 403)
+
+    data = request.get_json() or {}
+
+    comment_text = data.get("comment")
+    comment_type = data.get("comment_type", "note")
+
+    if not comment_text:
+        return error_response("comment is required", 400)
+
+    if comment_type not in COMMENT_TYPES:
+        return jsonify({
+            "message": "Invalid comment_type",
+            "error": "Invalid comment_type",
+            "allowed_values": COMMENT_TYPES
+        }), 400
+
+    comment = ServiceComment(
+        service_id=service.id,
+        employee_id=get_current_employee(current_user).id,
+        comment=comment_text,
+        comment_type=comment_type
+    )
+
+    db.session.add(comment)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Comment created successfully",
+        "comment": comment.serialize()
+    }), 201
+
+
+@api.route("/services/<int:service_id>/notify-admin", methods=["POST"])
+@jwt_required()
+def notify_admin(service_id):
+
+    current_user = get_current_user()
+    service, error = get_service_or_error(service_id, current_user)
+
+    if error:
+        return error
+
+    if is_mechanic(current_user):
+        employee = get_current_employee(current_user)
+
+        if service.employee_id != employee.id:
+            return error_response("You do not have permission to notify admin about this service", 403)
+
+    data = request.get_json() or {}
+    message = data.get("message")
+
+    if not message:
+        return error_response("message is required", 400)
+
+    comment = ServiceComment(
+        service_id=service.id,
+        employee_id=get_current_employee(current_user).id,
+        comment=message,
+        comment_type="admin_alert"
+    )
+
+    db.session.add(comment)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Admin notified successfully",
+        "comment": comment.serialize()
+    }), 201
+
+
+###---------------MECHANIC DASHBOARD----------------------
+
+@api.route("/mechanic/services", methods=["GET"])
+@jwt_required()
+def get_my_mechanic_services():
+
+    current_user = get_current_user()
+
+    if not is_mechanic(current_user):
+        return error_response("Only mechanic users can access this endpoint", 403)
+
+    employee = get_current_employee(current_user)
+    workshop_id = get_current_workshop_id(current_user)
+
+    services = (
+        Service.query
+        .filter_by(
+            workshop_id=workshop_id,
+            employee_id=employee.id
+        )
+        .order_by(Service.created_at.desc())
+        .all()
+    )
+
+    assigned_count = len(services)
+    in_repair_count = len([service for service in services if service.status == "in_repair"])
+    finished_count = len([
+        service for service in services
+        if service.status in ["ready_to_deliver", "delivered"]
+    ])
+
+    return jsonify({
+        "services": [service.serialize() for service in services],
+        "stats": {
+            "assigned": assigned_count,
+            "in_repair": in_repair_count,
+            "finished": finished_count
+        }
+    }), 200
+
+
+###---------------ADMIN DASHBOARD----------------------
+
+@api.route("/admin/dashboard", methods=["GET"])
+@jwt_required()
+def get_admin_dashboard():
+
+    current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can access this endpoint", 403)
+
+    workshop_id = get_current_workshop_id(current_user)
+
+    active_vehicles = Vehicle.query.filter_by(
+        workshop_id=workshop_id,
+        is_active=True
+    ).count()
+
+    mechanics_count = Employee.query.filter_by(
+        workshop_id=workshop_id,
+        role="mechanic",
+        is_active=True
+    ).count()
+
+    budget_pending = Service.query.filter_by(
+        workshop_id=workshop_id,
+        status="budget_pending"
+    ).count()
+
+    services = (
+        Service.query
+        .filter_by(workshop_id=workshop_id)
+        .order_by(Service.created_at.desc())
+        .all()
+    )
+
+    services_by_status = {}
+
+    for status in SERVICE_STATUSES:
+        services_by_status[status] = [
+            service.serialize() for service in services
+            if service.status == status
+        ]
+
+    return jsonify({
+        "stats": {
+            "active_vehicles": active_vehicles,
+            "mechanics_count": mechanics_count,
+            "budget_pending": budget_pending
+        },
+        "services_by_status": services_by_status
+    }), 200

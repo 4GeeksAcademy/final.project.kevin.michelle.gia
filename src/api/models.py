@@ -1,456 +1,21 @@
-
-from datetime import datetime, date, timezone
-from typing import List, Optional
-import enum
-
+from datetime import datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import (
-    String, Integer, Float, DateTime, Date, ForeignKey, Boolean, Text,
-    Enum as SQLEnum, UniqueConstraint, Index
-)
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 db = SQLAlchemy()
 
 
-class TipoCombustible(enum.Enum):
-    GASOLINA = "gasolina"
-    DIESEL = "diesel"
-    HIBRIDO = "hibrido"
-    HIBRIDO_ENCHUFABLE = "hibrido_enchufable"
-    ELECTRICO = "electrico"
-    GLP = "glp"
+# ============================================================
+#   WORKSHOP
+# ============================================================
 
-
-class EstadoReparacion(enum.Enum):
-    PENDIENTE = "pendiente"
-    EN_PROCESO = "en_proceso"
-    FINALIZADA = "finalizada"
-    CANCELADA = "cancelada"
-
-
-class EstadoMantenimiento(enum.Enum):
-    PROGRAMADO = "programado"
-    REALIZADO = "realizado"
-    OMITIDO = "omitido"
-    VENCIDO = "vencido"
-
-
-class User(db.Model):
-    __tablename__ = "users"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(
-        String(120), unique=True, nullable=False)
-    password: Mapped[str] = mapped_column(nullable=False)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean(), nullable=False, default=True)
-
-    def serialize(self):
-        return {"id": self.id, "email": self.email}
-
-
-class Cliente(db.Model):
-    __tablename__ = "clientes"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    nombre: Mapped[str] = mapped_column(String(80), nullable=False)
-    apellidos: Mapped[str] = mapped_column(String(120), nullable=False)
-    dni: Mapped[str] = mapped_column(
-        String(20), unique=True, nullable=False, index=True)
-    telefono: Mapped[Optional[str]] = mapped_column(String(20))
-    email: Mapped[Optional[str]] = mapped_column(String(120))
-    direccion: Mapped[Optional[str]] = mapped_column(String(255))
-    activo: Mapped[bool] = mapped_column(Boolean, default=True)
-    fecha_alta: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow)
-
-    propiedades: Mapped[List["Propiedad"]] = relationship(
-        back_populates="cliente")
-
-    def serialize(self):
-        return {
-            "id": self.id,
-            "nombre": self.nombre,
-            "apellidos": self.apellidos,
-            "dni": self.dni,
-            "telefono": self.telefono,
-            "email": self.email,
-            "direccion": self.direccion,
-            "activo": self.activo,
-            "fecha_alta": self.fecha_alta.isoformat() if self.fecha_alta else None,
-        }
-
-
-class Vehiculo(db.Model):
-    __tablename__ = "vehiculos"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    # Identificación
-    matricula: Mapped[str] = mapped_column(
-        String(15), unique=True, nullable=False, index=True)
-    vin: Mapped[str] = mapped_column(
-        String(17), unique=True, nullable=False, index=True)
-    marca: Mapped[str] = mapped_column(String(50), nullable=False)
-    modelo: Mapped[str] = mapped_column(String(80), nullable=False)
-    version: Mapped[Optional[str]] = mapped_column(String(80))
-    año: Mapped[int] = mapped_column(Integer, nullable=False)
-    combustible: Mapped[TipoCombustible] = mapped_column(
-        SQLEnum(TipoCombustible), nullable=False)
-    potencia_cv: Mapped[Optional[int]] = mapped_column(Integer)
-    cilindrada_cc: Mapped[Optional[int]] = mapped_column(Integer)
-    color: Mapped[Optional[str]] = mapped_column(String(40))
-    kilometraje_actual: Mapped[int] = mapped_column(Integer, default=0)
-    fecha_primera_matriculacion: Mapped[Optional[date]] = mapped_column(Date)
-
-    activo: Mapped[bool] = mapped_column(Boolean, default=True)
-    fecha_alta: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow)
-
-    propiedades: Mapped[List["Propiedad"]] = relationship(
-        back_populates="vehiculo", cascade="all, delete-orphan"
-    )
-    kilometrajes: Mapped[List["HistorialKilometraje"]] = relationship(
-        back_populates="vehiculo",
-        cascade="all, delete-orphan",
-        order_by="HistorialKilometraje.fecha_registro.desc()"
-    )
-    reparaciones: Mapped[List["Reparacion"]] = relationship(
-        back_populates="vehiculo", cascade="all, delete-orphan"
-    )
-    mantenimientos: Mapped[List["Mantenimiento"]] = relationship(
-        back_populates="vehiculo", cascade="all, delete-orphan"
-    )
-
-    @property
-    def propietario_actual(self):
-        for p in self.propiedades:
-            if p.es_actual:
-                return p.cliente
-        return None
-
-    @property
-    def coste_total_acumulado(self) -> float:
-        total_rep = sum(r.coste_total or 0 for r in self.reparaciones)
-        total_mant = sum(
-            m.coste or 0 for m in self.mantenimientos
-            if m.estado == EstadoMantenimiento.REALIZADO
-        )
-        return round(total_rep + total_mant, 2)
-
-    @property
-    def horas_mano_obra_totales(self) -> float:
-        horas_rep = sum(
-            r.tiempo_mano_obra_horas or 0 for r in self.reparaciones)
-        horas_mant = sum(
-            m.tiempo_mano_obra_horas or 0 for m in self.mantenimientos
-            if m.estado == EstadoMantenimiento.REALIZADO
-        )
-        return round(horas_rep + horas_mant, 2)
-
-    def serialize(self, incluir_historial: bool = False):
-        data = {
-            "id": self.id,
-            "matricula": self.matricula,
-            "vin": self.vin,
-            "marca": self.marca,
-            "modelo": self.modelo,
-            "version": self.version,
-            "año": self.año,
-            "combustible": self.combustible.value if self.combustible else None,
-            "potencia_cv": self.potencia_cv,
-            "cilindrada_cc": self.cilindrada_cc,
-            "color": self.color,
-            "kilometraje_actual": self.kilometraje_actual,
-            "fecha_primera_matriculacion": (
-                self.fecha_primera_matriculacion.isoformat()
-                if self.fecha_primera_matriculacion else None
-            ),
-            "activo": self.activo,
-            "propietario_actual": (
-                self.propietario_actual.serialize() if self.propietario_actual else None
-            ),
-            "coste_total_acumulado": self.coste_total_acumulado,
-            "horas_mano_obra_totales": self.horas_mano_obra_totales,
-        }
-        if incluir_historial:
-            data["historial_propietarios"] = [p.serialize()
-                                              for p in self.propiedades]
-            data["historial_kilometraje"] = [k.serialize()
-                                             for k in self.kilometrajes]
-            data["reparaciones"] = [r.serialize() for r in self.reparaciones]
-            data["mantenimientos"] = [m.serialize()
-                                      for m in self.mantenimientos]
-        return data
-
-
-class Propiedad(db.Model):
-    __tablename__ = "propiedades"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    vehiculo_id: Mapped[int] = mapped_column(
-        ForeignKey("vehiculos.id"), nullable=False)
-    cliente_id: Mapped[int] = mapped_column(
-        ForeignKey("clientes.id"), nullable=False)
-    fecha_inicio: Mapped[date] = mapped_column(Date, nullable=False)
-    fecha_fin: Mapped[Optional[date]] = mapped_column(Date)
-    es_actual: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
-    observaciones: Mapped[Optional[str]] = mapped_column(Text)
-
-    vehiculo: Mapped["Vehiculo"] = relationship(back_populates="propiedades")
-    cliente: Mapped["Cliente"] = relationship(back_populates="propiedades")
-
-    __table_args__ = (
-        Index("ix_propietario_actual_unico", "vehiculo_id", "es_actual",
-              unique=True, postgresql_where=(es_actual == True)),
-    )
-
-    def serialize(self):
-        return {
-            "id": self.id,
-            "vehiculo_id": self.vehiculo_id,
-            "cliente": self.cliente.serialize() if self.cliente else None,
-            "fecha_inicio": self.fecha_inicio.isoformat() if self.fecha_inicio else None,
-            "fecha_fin": self.fecha_fin.isoformat() if self.fecha_fin else None,
-            "es_actual": self.es_actual,
-            "observaciones": self.observaciones,
-        }
-
-
-class HistorialKilometraje(db.Model):
-    __tablename__ = "historial_kilometraje"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    vehiculo_id: Mapped[int] = mapped_column(
-        ForeignKey("vehiculos.id"), nullable=False, index=True)
-    kilometraje: Mapped[int] = mapped_column(Integer, nullable=False)
-    fecha_registro: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False)
-    motivo: Mapped[Optional[str]] = mapped_column(String(120))
-    registrado_por: Mapped[Optional[str]] = mapped_column(String(120))
-
-    vehiculo: Mapped["Vehiculo"] = relationship(back_populates="kilometrajes")
-
-    def serialize(self):
-        return {
-            "id": self.id,
-            "vehiculo_id": self.vehiculo_id,
-            "kilometraje": self.kilometraje,
-            "fecha_registro": self.fecha_registro.isoformat() if self.fecha_registro else None,
-            "motivo": self.motivo,
-            "registrado_por": self.registrado_por,
-        }
-
-
-class Mecanico(db.Model):
-    __tablename__ = "mecanicos"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    nombre: Mapped[str] = mapped_column(String(80), nullable=False)
-    apellidos: Mapped[str] = mapped_column(String(120), nullable=False)
-    dni: Mapped[Optional[str]] = mapped_column(String(20), unique=True)
-    especialidad: Mapped[Optional[str]] = mapped_column(String(120))
-    telefono: Mapped[Optional[str]] = mapped_column(String(20))
-    email: Mapped[Optional[str]] = mapped_column(String(120))
-    coste_hora: Mapped[Optional[float]] = mapped_column(Float)
-    fecha_alta: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow)
-    activo: Mapped[bool] = mapped_column(Boolean, default=True)
-
-    intervenciones: Mapped[List["ReparacionMecanico"]
-                           ] = relationship(back_populates="mecanico")
-
-    def serialize(self):
-        return {
-            "id": self.id,
-            "nombre": self.nombre,
-            "apellidos": self.apellidos,
-            "dni": self.dni,
-            "especialidad": self.especialidad,
-            "telefono": self.telefono,
-            "email": self.email,
-            "coste_hora": self.coste_hora,
-            "activo": self.activo,
-            "fecha_alta": self.fecha_alta.isoformat() if self.fecha_alta else None,
-        }
-
-
-class Reparacion(db.Model):
-    __tablename__ = "reparaciones"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    vehiculo_id: Mapped[int] = mapped_column(
-        ForeignKey("vehiculos.id"), nullable=False, index=True)
-    descripcion: Mapped[str] = mapped_column(Text, nullable=False)
-    fecha_entrada: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False)
-    fecha_salida: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    kilometraje_entrada: Mapped[Optional[int]] = mapped_column(Integer)
-    coste_repuestos: Mapped[float] = mapped_column(Float, default=0.0)
-    coste_mano_obra: Mapped[float] = mapped_column(Float, default=0.0)
-    coste_total: Mapped[float] = mapped_column(Float, default=0.0)
-    tiempo_mano_obra_horas: Mapped[float] = mapped_column(Float, default=0.0)
-    estado: Mapped[EstadoReparacion] = mapped_column(
-        SQLEnum(EstadoReparacion), default=EstadoReparacion.PENDIENTE
-    )
-    observaciones: Mapped[Optional[str]] = mapped_column(Text)
-
-    vehiculo: Mapped["Vehiculo"] = relationship(back_populates="reparaciones")
-    mecanicos_asignados: Mapped[List["ReparacionMecanico"]] = relationship(
-        back_populates="reparacion", cascade="all, delete-orphan"
-    )
-
-    def recalcular_coste_total(self):
-
-        self.coste_total = round(
-            (self.coste_repuestos or 0) + (self.coste_mano_obra or 0), 2)
-
-    def serialize(self):
-        return {
-            "id": self.id,
-            "vehiculo_id": self.vehiculo_id,
-            "descripcion": self.descripcion,
-            "fecha_entrada": self.fecha_entrada.isoformat() if self.fecha_entrada else None,
-            "fecha_salida": self.fecha_salida.isoformat() if self.fecha_salida else None,
-            "kilometraje_entrada": self.kilometraje_entrada,
-            "coste_repuestos": self.coste_repuestos,
-            "coste_mano_obra": self.coste_mano_obra,
-            "coste_total": self.coste_total,
-            "tiempo_mano_obra_horas": self.tiempo_mano_obra_horas,
-            "estado": self.estado.value if self.estado else None,
-            "observaciones": self.observaciones,
-            "mecanicos": [
-                {
-                    "mecanico": rm.mecanico.serialize() if rm.mecanico else None,
-                    "horas_invertidas": rm.horas_invertidas,
-                    "rol": rm.rol,
-                } for rm in self.mecanicos_asignados
-            ],
-        }
-
-
-class ReparacionMecanico(db.Model):
-    __tablename__ = "reparacion_mecanico"
-
-    reparacion_id: Mapped[int] = mapped_column(
-        ForeignKey("reparaciones.id"), primary_key=True)
-    mecanico_id: Mapped[int] = mapped_column(
-        ForeignKey("mecanicos.id"), primary_key=True)
-    horas_invertidas: Mapped[float] = mapped_column(Float, default=0.0)
-    rol: Mapped[Optional[str]] = mapped_column(String(60))
-
-    reparacion: Mapped["Reparacion"] = relationship(
-        back_populates="mecanicos_asignados")
-    mecanico: Mapped["Mecanico"] = relationship(
-        back_populates="intervenciones")
-
-
-class TipoMantenimiento(db.Model):
-
-    __tablename__ = "tipos_mantenimiento"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    nombre: Mapped[str] = mapped_column(
-        String(80), unique=True, nullable=False)
-    descripcion: Mapped[Optional[str]] = mapped_column(Text)
-    intervalo_km: Mapped[Optional[int]] = mapped_column(Integer)
-    intervalo_meses: Mapped[Optional[int]] = mapped_column(Integer)
-    activo: Mapped[bool] = mapped_column(Boolean, default=True)
-
-    def serialize(self):
-        return {
-            "id": self.id,
-            "nombre": self.nombre,
-            "descripcion": self.descripcion,
-            "intervalo_km": self.intervalo_km,
-            "intervalo_meses": self.intervalo_meses,
-            "activo": self.activo,
-        }
-
-
-class Mantenimiento(db.Model):
-    __tablename__ = "mantenimientos"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    vehiculo_id: Mapped[int] = mapped_column(
-        ForeignKey("vehiculos.id"), nullable=False, index=True)
-    tipo_mantenimiento_id: Mapped[int] = mapped_column(
-        ForeignKey("tipos_mantenimiento.id"), nullable=False)
-    mecanico_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("mecanicos.id"))
-
-    fecha_programada: Mapped[Optional[date]] = mapped_column(Date)
-    fecha_realizado: Mapped[Optional[date]] = mapped_column(Date)
-    kilometraje_programado: Mapped[Optional[int]] = mapped_column(Integer)
-    kilometraje_realizado: Mapped[Optional[int]] = mapped_column(Integer)
-    coste: Mapped[float] = mapped_column(Float, default=0.0)
-    tiempo_mano_obra_horas: Mapped[float] = mapped_column(Float, default=0.0)
-    estado: Mapped[EstadoMantenimiento] = mapped_column(
-        SQLEnum(EstadoMantenimiento), default=EstadoMantenimiento.PROGRAMADO
-    )
-    observaciones: Mapped[Optional[str]] = mapped_column(Text)
-
-    vehiculo: Mapped["Vehiculo"] = relationship(
-        back_populates="mantenimientos")
-    tipo: Mapped["TipoMantenimiento"] = relationship()
-    mecanico: Mapped[Optional["Mecanico"]] = relationship()
-
-    def serialize(self):
-        return {
-            "id": self.id,
-            "vehiculo_id": self.vehiculo_id,
-            "tipo": self.tipo.serialize() if self.tipo else None,
-            "mecanico": self.mecanico.serialize() if self.mecanico else None,
-            "fecha_programada": self.fecha_programada.isoformat() if self.fecha_programada else None,
-            "fecha_realizado": self.fecha_realizado.isoformat() if self.fecha_realizado else None,
-            "kilometraje_programado": self.kilometraje_programado,
-            "kilometraje_realizado": self.kilometraje_realizado,
-            "coste": self.coste,
-            "tiempo_mano_obra_horas": self.tiempo_mano_obra_horas,
-            "estado": self.estado.value if self.estado else None,
-            "observaciones": self.observaciones,
-        }
-
-
-class AuditoriaLog(db.Model):
-
-    __tablename__ = "auditoria_log"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    tabla: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
-    registro_id: Mapped[int] = mapped_column(
-        Integer, nullable=False, index=True)
-    accion: Mapped[str] = mapped_column(String(20), nullable=False)
-    valores_anteriores: Mapped[Optional[str]] = mapped_column(Text)
-    valores_nuevos: Mapped[Optional[str]] = mapped_column(Text)
-    usuario: Mapped[Optional[str]] = mapped_column(String(120))
-    timestamp: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False, index=True
-    )
-
-    def serialize(self):
-        return {
-            "id": self.id,
-            "tabla": self.tabla,
-            "registro_id": self.registro_id,
-            "accion": self.accion,
-            "valores_anteriores": self.valores_anteriores,
-            "valores_nuevos": self.valores_nuevos,
-            "usuario": self.usuario,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
-        }
-##------------------------------------------------------/////////////---------------------------------------------------------------
-
-##Revisar estado de models.py
-
-####----------------workshop--------------------------
 class Workshop(db.Model):
+
     __tablename__ = "workshops"
 
     id = db.Column(db.Integer, primary_key=True)
+
     company_name = db.Column(db.String(120), nullable=False)
-    cif = db.Column(db.String(20), unique=True, nullable=False)
+    cif = db.Column(db.String(50), unique=True, nullable=False)
     phone = db.Column(db.String(20), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     address = db.Column(db.String(200), nullable=True)
@@ -459,11 +24,15 @@ class Workshop(db.Model):
     is_active = db.Column(db.Boolean(), default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    users = db.relationship("User", backref="workshop", lazy=True)
     employees = db.relationship("Employee", backref="workshop", lazy=True)
+    customers = db.relationship("Customer", backref="workshop", lazy=True)
+    vehicles = db.relationship("Vehicle", backref="workshop", lazy=True)
+    services = db.relationship("Service", backref="workshop", lazy=True)
 
     def serialize(self):
+
         return {
+
             "id": self.id,
             "company_name": self.company_name,
             "cif": self.cif,
@@ -473,104 +42,338 @@ class Workshop(db.Model):
             "city": self.city,
             "postal_code": self.postal_code,
             "is_active": self.is_active,
-            "created_at": self.created_at.isoformat()
+            "created_at": self.created_at.isoformat() if self.created_at else None
+
         }
 
-####----------------USER-----------------------
+
+# ============================================================
+#   USER
+# ============================================================
 
 class User(db.Model):
+
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
+
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), nullable=False)
-    workshop_id = db.Column(db.Integer, db.ForeignKey("workshops.id"), nullable=False)
-    is_active = db.Column(db.Boolean(), default=True, nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), unique=True, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    employee = db.relationship("Employee", backref="user", uselist=False)
+    employee = db.relationship(
+        "Employee",
+        backref=db.backref("user", uselist=False),
+        uselist=False
+    )
 
     def serialize(self):
+
         return {
+
             "id": self.id,
             "email": self.email,
-            "role": self.role,
-            "workshop_id": self.workshop_id,
-            "is_active": self.is_active,
-            "created_at": self.created_at.isoformat()
+            "employee_id": self.employee_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "employee": self.employee.serialize_basic() if self.employee else None
+
         }
 
-####----------------EMPLOYEE--------------------------
+
+# ============================================================
+#   EMPLOYEE
+# ============================================================
 
 class Employee(db.Model):
+
     __tablename__ = "employees"
 
     id = db.Column(db.Integer, primary_key=True)
+
     first_name = db.Column(db.String(80), nullable=False)
-    last_name = db.Column(db.String(80), nullable=False)
+    last_name = db.Column(db.String(120), nullable=False)
     dni = db.Column(db.String(20), unique=True, nullable=False)
     phone = db.Column(db.String(20), nullable=False)
+    address = db.Column(db.String(200), nullable=True)
+    city = db.Column(db.String(80), nullable=True)
+    postal_code = db.Column(db.String(20), nullable=True)
+    role = db.Column(db.String(20), nullable=False, default="mechanic")
+    job_position = db.Column(db.String(80), nullable=True)
+    specialty = db.Column(db.String(120), nullable=True)
+
     workshop_id = db.Column(db.Integer, db.ForeignKey("workshops.id"), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), unique=True, nullable=False)
+
     is_active = db.Column(db.Boolean(), default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    def serialize(self):
+    services = db.relationship("Service", backref="employee", lazy=True)
+
+    def serialize_basic(self):
+
         return {
+
+            "id": self.id,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "role": self.role,
+            "workshop_id": self.workshop_id,
+            "is_active": self.is_active
+
+        }
+
+    def serialize(self):
+
+        return {
+
             "id": self.id,
             "first_name": self.first_name,
             "last_name": self.last_name,
             "dni": self.dni,
             "phone": self.phone,
+            "address": self.address,
+            "city": self.city,
+            "postal_code": self.postal_code,
+            "role": self.role,
+            "job_position": self.job_position,
+            "specialty": self.specialty,
             "workshop_id": self.workshop_id,
-            "user_id": self.user_id,
             "is_active": self.is_active,
-            "created_at": self.created_at.isoformat(),
-            "email": self.user.email if self.user else None,
-            "role": self.user.role if self.user else None
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "email": self.user.email if self.user else None
+
         }
-##---------SERVICES------------------
 
 
-id = db.Column(db.Integer, primary_key=True)
+# ============================================================
+#   CUSTOMER
+# ============================================================
+
+class Customer(db.Model):
+
+    __tablename__ = "customers"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    first_name = db.Column(db.String(80), nullable=False)
+    last_name = db.Column(db.String(120), nullable=False)
+    dni = db.Column(db.String(20), unique=True, nullable=False)
+    driving_license = db.Column(db.String(20), unique=True, nullable=False)
+    phone = db.Column(db.String(20), nullable=False)
+    email = db.Column(db.String(120), nullable=True)
+    address = db.Column(db.String(200), nullable=True)
+
+    workshop_id = db.Column(db.Integer, db.ForeignKey("workshops.id"), nullable=False)
+
+    is_active = db.Column(db.Boolean(), default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    vehicles = db.relationship("Vehicle", backref="customer", lazy=True)
+    services = db.relationship("Service", backref="customer", lazy=True)
+
+    def serialize(self):
+
+        return {
+
+            "id": self.id,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "dni": self.dni,
+            "driving_license": self.driving_license,
+            "phone": self.phone,
+            "email": self.email,
+            "address": self.address,
+            "workshop_id": self.workshop_id,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None
+
+        }
+
+
+# ============================================================
+#   VEHICLE
+# ============================================================
+
+class Vehicle(db.Model):
+
+    __tablename__ = "vehicles"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    plate = db.Column(db.String(20), unique=True, nullable=False)
+    vin = db.Column(db.String(50), unique=True, nullable=True)
+    brand = db.Column(db.String(80), nullable=False)
+    model = db.Column(db.String(80), nullable=False)
+    version = db.Column(db.String(80), nullable=True)
+    year = db.Column(db.Integer, nullable=True)
+    fuel_type = db.Column(db.String(30), nullable=False)
+    power_hp = db.Column(db.Integer, nullable=True)
+    engine_cc = db.Column(db.Integer, nullable=True)
+    color = db.Column(db.String(50), nullable=True)
+    mileage = db.Column(db.Integer, default=0, nullable=False)
+    first_registration_date = db.Column(db.Date, nullable=True)
+
+    customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=False)
+    workshop_id = db.Column(db.Integer, db.ForeignKey("workshops.id"), nullable=False)
+
+    is_active = db.Column(db.Boolean(), default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    services = db.relationship("Service", backref="vehicle", lazy=True)
+
+    def serialize(self):
+
+        return {
+
+            "id": self.id,
+            "plate": self.plate,
+            "vin": self.vin,
+            "brand": self.brand,
+            "model": self.model,
+            "version": self.version,
+            "year": self.year,
+            "fuel_type": self.fuel_type,
+            "power_hp": self.power_hp,
+            "engine_cc": self.engine_cc,
+            "color": self.color,
+            "mileage": self.mileage,
+            "first_registration_date": self.first_registration_date.isoformat() if self.first_registration_date else None,
+            "customer_id": self.customer_id,
+            "workshop_id": self.workshop_id,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "customer_name": f"{self.customer.first_name} {self.customer.last_name}" if self.customer else None
+
+        }
+
+
+# ============================================================
+#   SERVICE
+# ============================================================
+
+class Service(db.Model):
+
+    __tablename__ = "services"
+
+    id = db.Column(db.Integer, primary_key=True)
+
     title = db.Column(db.String(120), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(50), default="pending", nullable=False)
-    vehicle_id = db.Column(db.Integer, db.ForeignKey("vehiculos.id"), nullable=True)
-    mechanic_id = db.Column(db.Integer, db.ForeignKey("mecanicos.id"), nullable=True)
+    service_type = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(30), default="pending", nullable=False)
+    priority = db.Column(db.String(20), default="normal", nullable=False)
+
+    entry_mileage = db.Column(db.Integer, nullable=True)
+    start_date = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    end_date = db.Column(db.DateTime, nullable=True)
+    observations = db.Column(db.Text, nullable=True)
+
+    workshop_id = db.Column(db.Integer, db.ForeignKey("workshops.id"), nullable=False)
+    customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=False)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey("vehicles.id"), nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     comments = db.relationship("ServiceComment", backref="service", lazy=True)
+    status_logs = db.relationship("ServiceStatusLog", backref="service", lazy=True)
 
     def serialize(self):
+
         return {
+
             "id": self.id,
             "title": self.title,
             "description": self.description,
+            "service_type": self.service_type,
             "status": self.status,
+            "priority": self.priority,
+            "entry_mileage": self.entry_mileage,
+            "start_date": self.start_date.isoformat() if self.start_date else None,
+            "end_date": self.end_date.isoformat() if self.end_date else None,
+            "observations": self.observations,
+            "workshop_id": self.workshop_id,
+            "customer_id": self.customer_id,
             "vehicle_id": self.vehicle_id,
-            "mechanic_id": self.mechanic_id,
+            "employee_id": self.employee_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "comments": [comment.serialize() for comment in self.comments]
+            "vehicle_plate": self.vehicle.plate if self.vehicle else None,
+            "vehicle_brand": self.vehicle.brand if self.vehicle else None,
+            "vehicle_model": self.vehicle.model if self.vehicle else None,
+            "customer_name": f"{self.customer.first_name} {self.customer.last_name}" if self.customer else None,
+            "employee_name": f"{self.employee.first_name} {self.employee.last_name}" if self.employee else None
+
         }
 
-##--------SERVICES COMMENT-----
+
+# ============================================================
+#   SERVICE COMMENT
+# ============================================================
 
 class ServiceComment(db.Model):
+
     __tablename__ = "service_comments"
 
     id = db.Column(db.Integer, primary_key=True)
-    service_id = db.Column(db.Integer, db.ForeignKey("services.id"), nullable=False)
+
     comment = db.Column(db.Text, nullable=False)
-    mechanic_id = db.Column(db.Integer, db.ForeignKey("mecanicos.id"), nullable=True)
+    comment_type = db.Column(db.String(50), default="note", nullable=False)
+
+    service_id = db.Column(db.Integer, db.ForeignKey("services.id"), nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
+    author = db.relationship("Employee", foreign_keys=[employee_id])
+
     def serialize(self):
+
         return {
+
+            "id": self.id,
+            "comment": self.comment,
+            "comment_type": self.comment_type,
+            "service_id": self.service_id,
+            "employee_id": self.employee_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "author_name": f"{self.author.first_name} {self.author.last_name}" if self.author else None,
+            "author_email": self.author.user.email if self.author and self.author.user else None
+
+        }
+
+
+# ============================================================
+#   SERVICE STATUS
+# ============================================================
+
+class ServiceStatusLog(db.Model):
+
+    __tablename__ = "service_status_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    service_id = db.Column(db.Integer, db.ForeignKey("services.id"), nullable=False)
+    from_status = db.Column(db.String(30), nullable=True)
+    to_status = db.Column(db.String(30), nullable=False)
+
+    employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+
+    note = db.Column(db.Text, nullable=True)
+    changed_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    changed_by = db.relationship("Employee", foreign_keys=[employee_id])
+
+    def serialize(self):
+
+        return {
+
             "id": self.id,
             "service_id": self.service_id,
-            "comment": self.comment,
-            "mechanic_id": self.mechanic_id,
-            "created_at": self.created_at.isoformat() if self.created_at else None
+            "from_status": self.from_status,
+            "to_status": self.to_status,
+            "employee_id": self.employee_id,
+            "changed_by": f"{self.changed_by.first_name} {self.changed_by.last_name}" if self.changed_by else None,
+            "note": self.note,
+            "changed_at": self.changed_at.isoformat() if self.changed_at else None
+
         }

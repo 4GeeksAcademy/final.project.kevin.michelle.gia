@@ -1,0 +1,40 @@
+.loginCard {
+    max-width: 450px;
+    width: 100%;
+    border-radius: 15px;
+}
+
+.backArrow {
+    font-size: 1.5rem;
+    border: none;
+    background: none;
+}
+
+.titleHello {
+    font-size: 2rem;
+}
+
+.titleWelcome {
+    font-size: 1.8rem;
+}
+
+.loginInput {
+    border-radius: 15px;
+    background-color: #fdfdfd;
+}
+
+.passwordEye {
+    cursor: pointer;
+}
+
+.btnLogin {
+    border-radius: 25px;
+    background-color: #ff5a43;
+    color: white;
+    border: none; 
+}
+
+.btnLogin:hover {
+    background-color: #e04f3b;
+    color: white;
+}

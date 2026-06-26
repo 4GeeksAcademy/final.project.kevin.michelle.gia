@@ -1,0 +1,110 @@
+.app-customer-container {
+    --primary-orange: #e65c00;
+    --hover-orange: #cc5200;
+    background-color: #f8f9fa;
+    font-family: system-ui, -apple-system, sans-serif;
+}
+
+.header-title {
+    color: #333333;
+    font-weight: 700;
+}
+
+.btn-orange {
+    background-color: var(--primary-orange);
+    color: #ffffff;
+    border: none;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+
+.btn-orange:hover {
+    background-color: var(--hover-orange);
+    color: #ffffff;
+}
+
+.btn-orange-action {
+    background-color: var(--primary-orange);
+    border: 1px solid var(--primary-orange);
+    color: #ffffff;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    border-radius: 4px;
+}
+
+.btn-orange-action:hover {
+    background-color: var(--hover-orange);
+    border-color: var(--hover-orange);
+    color: #ffffff;
+}
+
+.text-muted-custom {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.select-records {
+    max-width: 140px;
+    display: inline-block;
+}
+
+.table-card-wrapper {
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.customer-workshop-table thead th {
+    background-color: #ffffff;
+    color: #212529;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.customer-workshop-table .search-row th {
+    padding: 4px 8px;
+    background-color: #fdfdfd;
+}
+
+.customer-workshop-table .search-row input::placeholder {
+    color: #adb5bd;
+    font-size: 0.8rem;
+}
+
+.badge-custom {
+    padding: 0.4em 0.65em;
+    font-size: 0.75em;
+    font-weight: 600;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.badge-suspended {
+    background-color: #f0ad4e; 
+    color: #ffffff;
+}
+
+.badge-active {
+    background-color: #5cb85c; 
+    color: #ffffff;
+}
+
+.badge-progress {
+    background-color: #0275d8; 
+    color: #ffffff;
+}
+
+.backend-dropdown {
+    z-index: 1050;
+    min-width: 240px;
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+}
+
+.style-cursor {
+    cursor: pointer;
+}
+
+.pagination .page-item.active .page-link {
+    background-color: var(--primary-orange);
+    border-color: var(--primary-orange);
+}

@@ -81,6 +81,7 @@ export const ClientSelector = ({
                     />
                     
                 </div>
+                </div>
 
                 
                 {modo === "existente" && (

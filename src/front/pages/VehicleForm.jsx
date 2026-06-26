@@ -1,391 +1,596 @@
-import { useState } from "react";
-import { crearCliente, crearVehiculo } from "../services/api";
-import { ClientSelector } from "../components/ClientSelector";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-const MATRICULA_REGEX = /^[0-9]{4}[\s-]?[A-Z]{3}$/;
+const RAW_BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:3001";
 
+const API_BASE_URL = RAW_BACKEND_URL.endsWith("/api")
+  ? RAW_BACKEND_URL
+  : `${RAW_BACKEND_URL.replace(/\/$/, "")}/api`;
+
+const PLATE_REGEX = /^[0-9]{4}[\s-]?[A-Z]{3}$/;
 const VIN_REGEX = /^[A-HJ-NPR-Z0-9]{17}$/;
 
-const VALORES_INICIALES = {
-    matricula: "",
-    vin: "",
-    marca: "",
-    modelo: "",
-    version: "",
-    anio: new Date().getFullYear(),
-    combustible: "gasolina",
-    potencia_cv: "",
-    cilindrada_cc: "",
-    color: "",
-    kilometraje_actual: 0,
-    fecha_primera_matriculacion: "",
+const emptyVehicleForm = {
+  customer_id: "",
+  plate: "",
+  vin: "",
+  brand: "",
+  model: "",
+  version: "",
+  year: new Date().getFullYear(),
+  fuel_type: "gasoline",
+  power_hp: "",
+  engine_cc: "",
+  color: "",
+  mileage: 0,
+  first_registration_date: ""
 };
 
+const fuelTypes = [
+  { value: "gasoline", label: "Gasoline" },
+  { value: "diesel", label: "Diesel" },
+  { value: "hybrid", label: "Hybrid" },
+  { value: "plug_in_hybrid", label: "Plug-in hybrid" },
+  { value: "electric", label: "Electric" },
+  { value: "lpg", label: "LPG" }
+];
+
+function getAuthHeaders() {
+  const token = localStorage.getItem("token");
+
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`
+  };
+}
+
+function buildUrl(path) {
+  return `${API_BASE_URL}${path}`;
+}
+
+function getCustomerLabel(customer) {
+  const fullName = `${customer.first_name || ""} ${customer.last_name || ""}`.trim();
+  const dni = customer.dni ? ` · ${customer.dni}` : "";
+  const email = customer.email ? ` · ${customer.email}` : "";
+
+  return `${fullName || "Customer"}${dni}${email}`;
+}
+
 export const VehicleForm = () => {
-    const [vehiculo, setVehiculo] = useState(VALORES_INICIALES);
-    const [clienteId, setClienteId] = useState(null);
-    const [nuevoCliente, setNuevoCliente] = useState({});
-    const [errores, setErrores] = useState({});
-    const [enviando, setEnviando] = useState(false);
-    const [mensaje, setMensaje] = useState(null); // { tipo, texto }
+  const navigate = useNavigate();
 
-    const handleChange = (campo, valor) => {
-        setVehiculo({ ...vehiculo, [campo]: valor });
-      
-        if (errores[campo]) {
-            setErrores({ ...errores, [campo]: undefined });
-        }
-    };
+  const [vehicle, setVehicle] = useState(emptyVehicleForm);
+  const [customers, setCustomers] = useState([]);
+  const [errors, setErrors] = useState({});
+  const [message, setMessage] = useState(null);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
+  const loadCustomers = async () => {
+    setIsLoadingCustomers(true);
+    setMessage(null);
 
-    const validar = () => {
-        const errs = {};
+    try {
+      const response = await fetch(buildUrl("/customers"), {
+        method: "GET",
+        headers: getAuthHeaders()
+      });
 
-        if (!vehiculo.matricula.trim()) {
-            errs.matricula = "Obligatoria";
-        } else if (!MATRICULA_REGEX.test(vehiculo.matricula.trim().toUpperCase())) {
-            errs.matricula = "Formato inválido (ej: 1234ABC)";
-        }
+      const data = await response.json();
 
-        if (!vehiculo.vin.trim()) {
-            errs.vin = "Obligatorio";
-        } else if (!VIN_REGEX.test(vehiculo.vin.trim().toUpperCase())) {
-            errs.vin = "VIN inválido (17 caracteres, sin I/O/Q)";
-        }
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            data.message ||
+            "Could not load customers."
+        );
+      }
 
-        if (!vehiculo.marca.trim()) errs.marca = "Obligatoria";
-        if (!vehiculo.modelo.trim()) errs.modelo = "Obligatorio";
+      setCustomers(data.customers || []);
+    } catch (error) {
+      setMessage({
+        type: "danger",
+        text: error.message
+      });
+    } finally {
+      setIsLoadingCustomers(false);
+    }
+  };
 
-        const anio = parseInt(vehiculo.anio);
-        const anioActual = new Date().getFullYear();
-        if (!anio || anio < 1900 || anio > anioActual + 1) {
-            errs.anio = `Entre 1900 y ${anioActual + 1}`;
-        }
+  useEffect(() => {
+    loadCustomers();
+  }, []);
 
-        const km = parseInt(vehiculo.kilometraje_actual);
-        if (isNaN(km) || km < 0) errs.kilometraje_actual = "Número positivo";
+  const handleChange = (field, value) => {
+    setVehicle((currentVehicle) => ({
+      ...currentVehicle,
+      [field]: value
+    }));
 
-        
-        const empezoCliente =
-            !clienteId &&
-            (nuevoCliente.nombre || nuevoCliente.apellidos || nuevoCliente.dni);
-        if (empezoCliente) {
-            if (!nuevoCliente.nombre?.trim()) errs.cliente = "Falta nombre del cliente";
-            else if (!nuevoCliente.apellidos?.trim())
-                errs.cliente = "Faltan apellidos del cliente";
-            else if (!nuevoCliente.dni?.trim()) errs.cliente = "Falta DNI del cliente";
-        }
+    if (errors[field]) {
+      setErrors((currentErrors) => ({
+        ...currentErrors,
+        [field]: undefined
+      }));
+    }
 
-        return errs;
-    };
+    setMessage(null);
+  };
 
-    const limpiarFormulario = () => {
-        setVehiculo(VALORES_INICIALES);
-        setClienteId(null);
-        setNuevoCliente({});
-        setErrores({});
-    };
+  const validate = () => {
+    const newErrors = {};
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setMensaje(null);
+    if (!vehicle.customer_id) {
+      newErrors.customer_id = "Please select a customer.";
+    }
 
-        const errs = validar();
-        if (Object.keys(errs).length > 0) {
-            setErrores(errs);
-            setMensaje({
-                tipo: "danger",
-                texto: "Revisa los campos marcados en rojo.",
-            });
-            return;
-        }
+    if (!vehicle.plate.trim()) {
+      newErrors.plate = "Plate is required.";
+    } else if (!PLATE_REGEX.test(vehicle.plate.trim().toUpperCase())) {
+      newErrors.plate = "Invalid format. Example: 1234ABC.";
+    }
 
-        setEnviando(true);
-        try {
-            let propietarioId = clienteId;
+    if (!vehicle.vin.trim()) {
+      newErrors.vin = "VIN is required.";
+    } else if (!VIN_REGEX.test(vehicle.vin.trim().toUpperCase())) {
+      newErrors.vin = "Invalid VIN. It must have 17 characters and no I/O/Q.";
+    }
 
-           
-            const creandoCliente =
-                !clienteId &&
-                nuevoCliente.nombre &&
-                nuevoCliente.apellidos &&
-                nuevoCliente.dni;
+    if (!vehicle.brand.trim()) {
+      newErrors.brand = "Brand is required.";
+    }
 
-            if (creandoCliente) {
-                const clienteCreado = await crearCliente({
-                    nombre: nuevoCliente.nombre.trim(),
-                    apellidos: nuevoCliente.apellidos.trim(),
-                    dni: nuevoCliente.dni.trim().toUpperCase(),
-                    telefono: nuevoCliente.telefono?.trim() || null,
-                    email: nuevoCliente.email?.trim() || null,
-                    direccion: nuevoCliente.direccion?.trim() || null,
-                });
-                propietarioId = clienteCreado.id;
-            }
+    if (!vehicle.model.trim()) {
+      newErrors.model = "Model is required.";
+    }
 
-            // 
-            const payload = {
-                matricula: vehiculo.matricula
-                    .trim()
-                    .toUpperCase()
-                    .replace(/[\s-]/g, ""), 
-                vin: vehiculo.vin.trim().toUpperCase(),
-                marca: vehiculo.marca.trim(),
-                modelo: vehiculo.modelo.trim(),
-                version: vehiculo.version.trim() || null,
-                anio: parseInt(vehiculo.anio),
-                combustible: vehiculo.combustible,
-                potencia_cv: vehiculo.potencia_cv
-                    ? parseInt(vehiculo.potencia_cv)
-                    : null,
-                cilindrada_cc: vehiculo.cilindrada_cc
-                    ? parseInt(vehiculo.cilindrada_cc)
-                    : null,
-                color: vehiculo.color.trim() || null,
-                kilometraje_actual: parseInt(vehiculo.kilometraje_actual) || 0,
-                fecha_primera_matriculacion:
-                    vehiculo.fecha_primera_matriculacion || null,
-                propietario_inicial_id: propietarioId,
-            };
+    const year = Number(vehicle.year);
+    const currentYear = new Date().getFullYear();
 
-            const vehiculoCreado = await crearVehiculo(payload);
+    if (!year || year < 1900 || year > currentYear + 1) {
+      newErrors.year = `Year must be between 1900 and ${currentYear + 1}.`;
+    }
 
-            setMensaje({
-                tipo: "success",
-                texto: `✅ Vehículo ${vehiculoCreado.matricula} creado correctamente (ID ${vehiculoCreado.id}).`,
-            });
-            limpiarFormulario();
-        } catch (err) {
-            setMensaje({ tipo: "danger", texto: `❌ ${err.message}` });
-        } finally {
-            setEnviando(false);
-        }
-    };
+    const mileage = Number(vehicle.mileage);
 
-    return (
-        <div className="container py-4">
-            <h1 className="mb-4">Alta de vehículo</h1>
+    if (Number.isNaN(mileage) || mileage < 0) {
+      newErrors.mileage = "Mileage must be a positive number.";
+    }
 
-            {mensaje && (
-                <div className={`alert alert-${mensaje.tipo} alert-dismissible fade show`}>
-                    {mensaje.texto}
-                    <button
-                        type="button"
-                        className="btn-close"
-                        onClick={() => setMensaje(null)}
-                    />
-                </div>
-            )}
+    return newErrors;
+  };
 
-            <form onSubmit={handleSubmit} noValidate>
-             
-                <div className="card mb-3">
-                    <div className="card-header">
-                        <strong>Datos del vehículo</strong>
-                    </div>
-                    <div className="card-body">
-                        <div className="row g-3">
-                            <div className="col-md-4">
-                                <label className="form-label">Matrícula *</label>
-                                <input
-                                    type="text"
-                                    className={`form-control ${errores.matricula ? "is-invalid" : ""}`}
-                                    placeholder="1234ABC"
-                                    value={vehiculo.matricula}
-                                    onChange={(e) =>
-                                        handleChange("matricula", e.target.value.toUpperCase())
-                                    }
-                                />
-                                {errores.matricula && (
-                                    <div className="invalid-feedback">{errores.matricula}</div>
-                                )}
-                            </div>
+  const resetForm = () => {
+    setVehicle(emptyVehicleForm);
+    setErrors({});
+  };
 
-                            <div className="col-md-8">
-                                <label className="form-label">VIN (bastidor) *</label>
-                                <input
-                                    type="text"
-                                    className={`form-control ${errores.vin ? "is-invalid" : ""}`}
-                                    placeholder="17 caracteres"
-                                    maxLength={17}
-                                    value={vehiculo.vin}
-                                    onChange={(e) =>
-                                        handleChange("vin", e.target.value.toUpperCase())
-                                    }
-                                />
-                                {errores.vin && (
-                                    <div className="invalid-feedback">{errores.vin}</div>
-                                )}
-                            </div>
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-                            <div className="col-md-4">
-                                <label className="form-label">Marca *</label>
-                                <input
-                                    type="text"
-                                    className={`form-control ${errores.marca ? "is-invalid" : ""}`}
-                                    placeholder="Ej: Volkswagen"
-                                    value={vehiculo.marca}
-                                    onChange={(e) => handleChange("marca", e.target.value)}
-                                />
-                                {errores.marca && (
-                                    <div className="invalid-feedback">{errores.marca}</div>
-                                )}
-                            </div>
+    setMessage(null);
 
-                            <div className="col-md-4">
-                                <label className="form-label">Modelo *</label>
-                                <input
-                                    type="text"
-                                    className={`form-control ${errores.modelo ? "is-invalid" : ""}`}
-                                    placeholder="Ej: Golf"
-                                    value={vehiculo.modelo}
-                                    onChange={(e) => handleChange("modelo", e.target.value)}
-                                />
-                                {errores.modelo && (
-                                    <div className="invalid-feedback">{errores.modelo}</div>
-                                )}
-                            </div>
+    const validationErrors = validate();
 
-                            <div className="col-md-4">
-                                <label className="form-label">Versión</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    placeholder="Ej: 1.6 TDI Advance"
-                                    value={vehiculo.version}
-                                    onChange={(e) => handleChange("version", e.target.value)}
-                                />
-                            </div>
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      setMessage({
+        type: "danger",
+        text: "Please review the fields marked in red."
+      });
+      return;
+    }
 
-                            <div className="col-md-3">
-                                <label className="form-label">Año *</label>
-                                <input
-                                    type="number"
-                                    className={`form-control ${errores.anio ? "is-invalid" : ""}`}
-                                    value={vehiculo.anio}
-                                    onChange={(e) => handleChange("anio", e.target.value)}
-                                />
-                                {errores.anio && (
-                                    <div className="invalid-feedback">{errores.anio}</div>
-                                )}
-                            </div>
+    setIsSaving(true);
 
-                            <div className="col-md-3">
-                                <label className="form-label">Combustible *</label>
-                                <select
-                                    className="form-select"
-                                    value={vehiculo.combustible}
-                                    onChange={(e) => handleChange("combustible", e.target.value)}
-                                >
-                                    <option value="gasolina">Gasolina</option>
-                                    <option value="diesel">Diésel</option>
-                                    <option value="hibrido">Híbrido</option>
-                                    <option value="hibrido_enchufable">Híbrido enchufable</option>
-                                    <option value="electrico">Eléctrico</option>
-                                    <option value="glp">GLP</option>
-                                    <option value="gnc">GNC</option>
-                                </select>
-                            </div>
+    try {
+      const payload = {
+        customer_id: Number(vehicle.customer_id),
+        plate: vehicle.plate.trim().toUpperCase().replace(/[\s-]/g, ""),
+        vin: vehicle.vin.trim().toUpperCase(),
+        brand: vehicle.brand.trim(),
+        model: vehicle.model.trim(),
+        version: vehicle.version.trim() || null,
+        year: Number(vehicle.year),
+        fuel_type: vehicle.fuel_type,
+        power_hp: vehicle.power_hp ? Number(vehicle.power_hp) : null,
+        engine_cc: vehicle.engine_cc ? Number(vehicle.engine_cc) : null,
+        color: vehicle.color.trim() || null,
+        mileage: Number(vehicle.mileage) || 0,
+        first_registration_date: vehicle.first_registration_date || null
+      };
 
-                            <div className="col-md-3">
-                                <label className="form-label">Potencia (CV)</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    className="form-control"
-                                    value={vehiculo.potencia_cv}
-                                    onChange={(e) =>
-                                        handleChange("potencia_cv", e.target.value)
-                                    }
-                                />
-                            </div>
+      const response = await fetch(buildUrl("/vehicles"), {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
 
-                            <div className="col-md-3">
-                                <label className="form-label">Cilindrada (cc)</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    className="form-control"
-                                    value={vehiculo.cilindrada_cc}
-                                    onChange={(e) =>
-                                        handleChange("cilindrada_cc", e.target.value)
-                                    }
-                                />
-                            </div>
+      const data = await response.json();
 
-                            <div className="col-md-4">
-                                <label className="form-label">Color</label>
-                                <input
-                                    type="text"
-                                    className="form-control"
-                                    value={vehiculo.color}
-                                    onChange={(e) => handleChange("color", e.target.value)}
-                                />
-                            </div>
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            data.message ||
+            "Could not create vehicle."
+        );
+      }
 
-                            <div className="col-md-4">
-                                <label className="form-label">Kilometraje *</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    className={`form-control ${errores.kilometraje_actual ? "is-invalid" : ""}`}
-                                    value={vehiculo.kilometraje_actual}
-                                    onChange={(e) =>
-                                        handleChange("kilometraje_actual", e.target.value)
-                                    }
-                                />
-                                {errores.kilometraje_actual && (
-                                    <div className="invalid-feedback">
-                                        {errores.kilometraje_actual}
-                                    </div>
-                                )}
-                            </div>
+      setMessage({
+        type: "success",
+        text: `Vehicle ${data.vehicle?.plate || payload.plate} created successfully.`
+      });
 
-                            <div className="col-md-4">
-                                <label className="form-label">Fecha 1ª matriculación</label>
-                                <input
-                                    type="date"
-                                    className="form-control"
-                                    value={vehiculo.fecha_primera_matriculacion}
-                                    onChange={(e) =>
-                                        handleChange(
-                                            "fecha_primera_matriculacion",
-                                            e.target.value
-                                        )
-                                    }
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
+      resetForm();
+    } catch (error) {
+      setMessage({
+        type: "danger",
+        text: error.message
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-               
-                <ClientSelector
-                    value={clienteId}
-                    onChange={setClienteId}
-                    nuevoCliente={nuevoCliente}
-                    onChangeNuevoCliente={setNuevoCliente}
-                    error={errores.cliente}
+  return (
+    <div className="container-fluid bg-light min-vh-100 py-4">
+      <main className="container">
+        <header className="bg-white border rounded-4 shadow-sm p-4 mb-4">
+          <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3">
+            <div>
+              <p className="text-uppercase text-danger small fw-bold mb-2">
+                Vehicles
+              </p>
+
+              <h1 className="fw-bold text-dark mb-2">
+                Create vehicle
+              </h1>
+
+              <p className="text-muted mb-0">
+                Register a vehicle and link it to an existing customer.
+              </p>
+            </div>
+
+            <div className="d-flex flex-column flex-sm-row gap-2">
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm px-3"
+                onClick={loadCustomers}
+                disabled={isLoadingCustomers}
+              >
+                {isLoadingCustomers ? "Loading..." : "Refresh customers"}
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm px-3"
+                onClick={() => navigate("/dashboard")}
+              >
+                Back to dashboard
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {message && (
+          <div className={`alert alert-${message.type} alert-dismissible fade show rounded-4`}>
+            {message.text}
+
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setMessage(null)}
+            />
+          </div>
+        )}
+
+        {customers.length === 0 && (
+          <div className="alert alert-warning rounded-4">
+            No customers found. Create a customer before registering a vehicle.
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} noValidate>
+          <section className="bg-white border rounded-4 shadow-sm p-4 mb-4">
+            <p className="text-uppercase text-muted small fw-semibold mb-2">
+              Owner
+            </p>
+
+            <h2 className="h4 fw-bold mb-4">
+              Customer
+            </h2>
+
+            <div className="row g-3">
+              <div className="col-12">
+                <label className="form-label fw-semibold" htmlFor="customer_id">
+                  Customer *
+                </label>
+
+                <select
+                  id="customer_id"
+                  className={`form-select py-2 px-3 ${errors.customer_id ? "is-invalid" : ""}`}
+                  value={vehicle.customer_id}
+                  onChange={(event) => handleChange("customer_id", event.target.value)}
+                  disabled={customers.length === 0}
+                  required
+                >
+                  <option value="">Select a customer</option>
+
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {getCustomerLabel(customer)}
+                    </option>
+                  ))}
+                </select>
+
+                {errors.customer_id && (
+                  <div className="invalid-feedback">
+                    {errors.customer_id}
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="bg-white border rounded-4 shadow-sm p-4 mb-4">
+            <p className="text-uppercase text-muted small fw-semibold mb-2">
+              Vehicle data
+            </p>
+
+            <h2 className="h4 fw-bold mb-4">
+              Vehicle information
+            </h2>
+
+            <div className="row g-3">
+              <div className="col-12 col-md-4">
+                <label className="form-label fw-semibold" htmlFor="plate">
+                  Plate *
+                </label>
+
+                <input
+                  id="plate"
+                  type="text"
+                  className={`form-control py-2 px-3 ${errors.plate ? "is-invalid" : ""}`}
+                  placeholder="1234ABC"
+                  value={vehicle.plate}
+                  onChange={(event) =>
+                    handleChange("plate", event.target.value.toUpperCase())
+                  }
                 />
 
-            
-                <div className="d-flex gap-2">
-                    <button type="submit" className="btn btn-primary" disabled={enviando}>
-                        {enviando ? "Guardando..." : "Crear vehículo"}
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn-outline-secondary"
-                        onClick={() => {
-                            limpiarFormulario();
-                            setMensaje(null);
-                        }}
-                        disabled={enviando}
-                    >
-                        Limpiar
-                    </button>
-                </div>
-            </form>
-        </div>
-    );
+                {errors.plate && (
+                  <div className="invalid-feedback">
+                    {errors.plate}
+                  </div>
+                )}
+              </div>
+
+              <div className="col-12 col-md-8">
+                <label className="form-label fw-semibold" htmlFor="vin">
+                  VIN *
+                </label>
+
+                <input
+                  id="vin"
+                  type="text"
+                  className={`form-control py-2 px-3 ${errors.vin ? "is-invalid" : ""}`}
+                  placeholder="17 characters"
+                  maxLength={17}
+                  value={vehicle.vin}
+                  onChange={(event) =>
+                    handleChange("vin", event.target.value.toUpperCase())
+                  }
+                />
+
+                {errors.vin && (
+                  <div className="invalid-feedback">
+                    {errors.vin}
+                  </div>
+                )}
+              </div>
+
+              <div className="col-12 col-md-4">
+                <label className="form-label fw-semibold" htmlFor="brand">
+                  Brand *
+                </label>
+
+                <input
+                  id="brand"
+                  type="text"
+                  className={`form-control py-2 px-3 ${errors.brand ? "is-invalid" : ""}`}
+                  placeholder="Example: Ford"
+                  value={vehicle.brand}
+                  onChange={(event) => handleChange("brand", event.target.value)}
+                />
+
+                {errors.brand && (
+                  <div className="invalid-feedback">
+                    {errors.brand}
+                  </div>
+                )}
+              </div>
+
+              <div className="col-12 col-md-4">
+                <label className="form-label fw-semibold" htmlFor="model">
+                  Model *
+                </label>
+
+                <input
+                  id="model"
+                  type="text"
+                  className={`form-control py-2 px-3 ${errors.model ? "is-invalid" : ""}`}
+                  placeholder="Example: Focus"
+                  value={vehicle.model}
+                  onChange={(event) => handleChange("model", event.target.value)}
+                />
+
+                {errors.model && (
+                  <div className="invalid-feedback">
+                    {errors.model}
+                  </div>
+                )}
+              </div>
+
+              <div className="col-12 col-md-4">
+                <label className="form-label fw-semibold" htmlFor="version">
+                  Version
+                </label>
+
+                <input
+                  id="version"
+                  type="text"
+                  className="form-control py-2 px-3"
+                  placeholder="Example: 1.6 TDI"
+                  value={vehicle.version}
+                  onChange={(event) => handleChange("version", event.target.value)}
+                />
+              </div>
+
+              <div className="col-12 col-md-3">
+                <label className="form-label fw-semibold" htmlFor="year">
+                  Year *
+                </label>
+
+                <input
+                  id="year"
+                  type="number"
+                  className={`form-control py-2 px-3 ${errors.year ? "is-invalid" : ""}`}
+                  value={vehicle.year}
+                  onChange={(event) => handleChange("year", event.target.value)}
+                />
+
+                {errors.year && (
+                  <div className="invalid-feedback">
+                    {errors.year}
+                  </div>
+                )}
+              </div>
+
+              <div className="col-12 col-md-3">
+                <label className="form-label fw-semibold" htmlFor="fuel_type">
+                  Fuel type *
+                </label>
+
+                <select
+                  id="fuel_type"
+                  className="form-select py-2 px-3"
+                  value={vehicle.fuel_type}
+                  onChange={(event) => handleChange("fuel_type", event.target.value)}
+                >
+                  {fuelTypes.map((fuelType) => (
+                    <option key={fuelType.value} value={fuelType.value}>
+                      {fuelType.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="col-12 col-md-3">
+                <label className="form-label fw-semibold" htmlFor="power_hp">
+                  Power HP
+                </label>
+
+                <input
+                  id="power_hp"
+                  type="number"
+                  min="0"
+                  className="form-control py-2 px-3"
+                  value={vehicle.power_hp}
+                  onChange={(event) => handleChange("power_hp", event.target.value)}
+                />
+              </div>
+
+              <div className="col-12 col-md-3">
+                <label className="form-label fw-semibold" htmlFor="engine_cc">
+                  Engine CC
+                </label>
+
+                <input
+                  id="engine_cc"
+                  type="number"
+                  min="0"
+                  className="form-control py-2 px-3"
+                  value={vehicle.engine_cc}
+                  onChange={(event) => handleChange("engine_cc", event.target.value)}
+                />
+              </div>
+
+              <div className="col-12 col-md-4">
+                <label className="form-label fw-semibold" htmlFor="color">
+                  Color
+                </label>
+
+                <input
+                  id="color"
+                  type="text"
+                  className="form-control py-2 px-3"
+                  value={vehicle.color}
+                  onChange={(event) => handleChange("color", event.target.value)}
+                />
+              </div>
+
+              <div className="col-12 col-md-4">
+                <label className="form-label fw-semibold" htmlFor="mileage">
+                  Mileage *
+                </label>
+
+                <input
+                  id="mileage"
+                  type="number"
+                  min="0"
+                  className={`form-control py-2 px-3 ${errors.mileage ? "is-invalid" : ""}`}
+                  value={vehicle.mileage}
+                  onChange={(event) => handleChange("mileage", event.target.value)}
+                />
+
+                {errors.mileage && (
+                  <div className="invalid-feedback">
+                    {errors.mileage}
+                  </div>
+                )}
+              </div>
+
+              <div className="col-12 col-md-4">
+                <label className="form-label fw-semibold" htmlFor="first_registration_date">
+                  First registration date
+                </label>
+
+                <input
+                  id="first_registration_date"
+                  type="date"
+                  className="form-control py-2 px-3"
+                  value={vehicle.first_registration_date}
+                  onChange={(event) =>
+                    handleChange("first_registration_date", event.target.value)
+                  }
+                />
+              </div>
+            </div>
+          </section>
+
+          <div className="d-flex flex-column flex-sm-row gap-2">
+            <button
+              type="submit"
+              className="btn btn-dark px-4 py-3 fw-bold"
+              disabled={isSaving || customers.length === 0}
+            >
+              {isSaving ? "Creating vehicle..." : "Create vehicle"}
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-outline-secondary px-4 py-3"
+              onClick={() => {
+                resetForm();
+                setMessage(null);
+              }}
+              disabled={isSaving}
+            >
+              Clear
+            </button>
+          </div>
+        </form>
+      </main>
+    </div>
+  );
 };

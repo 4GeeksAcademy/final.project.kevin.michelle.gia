@@ -1,34 +1,38 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import "./ServiceStatusBoard.css";
 
-const RAW_BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:3001";
 
-const API_BASE_URL = RAW_BACKEND_URL.endsWith("/api")
-  ? RAW_BACKEND_URL
-  : `${RAW_BACKEND_URL.replace(/\/$/, "")}/api`;
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL + "/api";
+
 
 const BOARD_COLUMNS = [
+
   {
     id: "to_repair",
     title: "Vehicles to repair",
     statuses: ["pending", "diagnosis", "budget_pending", "waiting_parts"],
   },
+
   {
     id: "in_progress",
     title: "In progress",
     statuses: ["in_repair"],
   },
+
   {
     id: "ready_for_pickup",
     title: "Ready for pickup",
     statuses: ["ready_to_deliver"],
   },
+
   {
     id: "finished",
     title: "Finished",
     statuses: ["delivered"],
   },
+  
 ];
+
 
 const STATUS_LABELS = {
   pending: "Pending",
@@ -41,66 +45,90 @@ const STATUS_LABELS = {
   cancelled: "Cancelled",
 };
 
+
 const STATUS_ACTIONS = {
   pending: {
     label: "Start repair",
     nextStatus: "in_repair",
   },
+
   diagnosis: {
     label: "Start repair",
     nextStatus: "in_repair",
   },
+
   budget_pending: {
     label: "Waiting parts",
     nextStatus: "waiting_parts",
   },
+
   waiting_parts: {
     label: "Start repair",
     nextStatus: "in_repair",
   },
+
   in_repair: {
     label: "Ready for pickup",
     nextStatus: "ready_to_deliver",
   },
+
   ready_to_deliver: {
     label: "Mark as delivered",
     nextStatus: "delivered",
   },
 };
 
+
 function buildUrl(path) {
-  return `${API_BASE_URL}${path}`;
+  return API_BASE_URL + path;
 }
+
 
 function getAuthHeaders() {
   const token = localStorage.getItem("token");
 
   return {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
+    Authorization: "Bearer " + token,
   };
 }
 
+
 function formatDate(dateValue) {
-  if (!dateValue) return "No date";
+  if (!dateValue) {
+    return "No date";
+  }
+
+  const date = new Date(dateValue);
 
   return new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  }).format(new Date(dateValue));
+  }).format(date);
 }
+
 
 function normalizeAdminServices(servicesByStatus) {
-  if (!servicesByStatus) return [];
+  if (!servicesByStatus) {
+    return [];
+  }
 
-  return Object.entries(servicesByStatus).flatMap(([status, services]) =>
-    services.map((service) => ({
-      ...service,
-      status: service.status || status,
-    }))
-  );
+  let finalServices = [];
+
+  Object.entries(servicesByStatus).forEach(([status, services]) => {
+    services.forEach((service) => {
+      finalServices.push({
+        ...service,
+        status: service.status || status,
+      });
+    });
+  });
+
+  return finalServices;
 }
+
+
 
 export function ServiceStatusBoard({ role = "admin" }) {
   const [services, setServices] = useState([]);
@@ -111,12 +139,17 @@ export function ServiceStatusBoard({ role = "admin" }) {
 
   const isMechanic = role === "mechanic";
 
-  const fetchServices = useCallback(async () => {
+
+  async function fetchServices() {
     try {
       setIsLoading(true);
       setError("");
 
-      const endpoint = isMechanic ? "/mechanic/services" : "/admin/dashboard";
+      let endpoint = "/admin/dashboard";
+
+      if (isMechanic) {
+        endpoint = "/mechanic/services";
+      }
 
       const response = await fetch(buildUrl(endpoint), {
         method: "GET",
@@ -133,36 +166,39 @@ export function ServiceStatusBoard({ role = "admin" }) {
         setServices(data.services || []);
         setStats(data.stats || null);
       } else {
-        setServices(normalizeAdminServices(data.services_by_status));
+        const adminServices = normalizeAdminServices(data.services_by_status);
+
+        setServices(adminServices);
         setStats(data.stats || null);
       }
+
     } catch (error) {
       setError(error.message);
+
     } finally {
       setIsLoading(false);
     }
-  }, [isMechanic]);
+  }
+
 
   useEffect(() => {
     fetchServices();
-  }, [fetchServices]);
+  }, [role]);
 
-  const servicesByColumn = useMemo(() => {
-    return BOARD_COLUMNS.reduce((acc, column) => {
-      acc[column.id] = services.filter((service) =>
-        column.statuses.includes(service.status)
-      );
 
-      return acc;
-    }, {});
-  }, [services]);
+  function getServicesByColumn(column) {
+    return services.filter((service) => {
+      return column.statuses.includes(service.status);
+    });
+  }
+
 
   async function updateServiceStatus(serviceId, nextStatus) {
     try {
       setActionLoadingId(serviceId);
       setError("");
 
-      const response = await fetch(buildUrl(`/services/${serviceId}/status`), {
+      const response = await fetch(buildUrl("/services/" + serviceId + "/status"), {
         method: "PATCH",
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -178,23 +214,28 @@ export function ServiceStatusBoard({ role = "admin" }) {
       }
 
       await fetchServices();
+
     } catch (error) {
       setError(error.message);
+
     } finally {
       setActionLoadingId(null);
     }
   }
 
+
   async function reportIssue(serviceId) {
     const message = window.prompt("Describe the issue:");
 
-    if (!message || !message.trim()) return;
+    if (!message || !message.trim()) {
+      return;
+    }
 
     try {
       setActionLoadingId(serviceId);
       setError("");
 
-      const response = await fetch(buildUrl(`/services/${serviceId}/notify-admin`), {
+      const response = await fetch(buildUrl("/services/" + serviceId + "/notify-admin"), {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -209,24 +250,30 @@ export function ServiceStatusBoard({ role = "admin" }) {
       }
 
       await fetchServices();
+
     } catch (error) {
       setError(error.message);
+
     } finally {
       setActionLoadingId(null);
     }
   }
 
+
   if (isLoading) {
     return <p className="status-board-message">Loading services...</p>;
   }
 
+
   return (
     <section className="status-board">
+
       <div className="status-board-header">
         <div>
           <p className="status-board-kicker">
             {isMechanic ? "Mechanic dashboard" : "Coordinator dashboard"}
           </p>
+
           <h2>Workshop status board</h2>
         </div>
 
@@ -235,7 +282,9 @@ export function ServiceStatusBoard({ role = "admin" }) {
         </button>
       </div>
 
+
       {error && <p className="status-board-error">{error}</p>}
+
 
       {stats && (
         <div className="status-board-stats">
@@ -248,18 +297,23 @@ export function ServiceStatusBoard({ role = "admin" }) {
         </div>
       )}
 
+
       <div className="status-board-columns">
+
         {BOARD_COLUMNS.map((column) => {
-          const columnServices = servicesByColumn[column.id] || [];
+          const columnServices = getServicesByColumn(column);
 
           return (
             <div className="status-column" key={column.id}>
+
               <div className="status-column-header">
                 <h3>{column.title}</h3>
                 <span>{columnServices.length}</span>
               </div>
 
+
               <div className="status-column-list">
+
                 {columnServices.length === 0 ? (
                   <p className="empty-column">No services here.</p>
                 ) : (
@@ -268,6 +322,7 @@ export function ServiceStatusBoard({ role = "admin" }) {
 
                     return (
                       <article className="service-card" key={service.id}>
+
                         <div className="service-card-top">
                           <span className={`status-pill status-${service.status}`}>
                             {STATUS_LABELS[service.status] || service.status}
@@ -278,44 +333,49 @@ export function ServiceStatusBoard({ role = "admin" }) {
                           </span>
                         </div>
 
+
                         <h4>{service.customer_name || "Unknown customer"}</h4>
+
 
                         <p className="vehicle-line">
                           {service.vehicle_brand} {service.vehicle_model}
-                          {service.vehicle_plate ? ` · ${service.vehicle_plate}` : ""}
+                          {service.vehicle_plate ? " · " + service.vehicle_plate : ""}
                         </p>
 
+
                         <p className="service-title">{service.title}</p>
+
 
                         <div className="service-meta">
                           <span>Mechanic:</span>
                           <strong>{service.employee_name || "Unassigned"}</strong>
                         </div>
 
+
                         <div className="service-meta">
                           <span>Entry date:</span>
                           <strong>{formatDate(service.start_date)}</strong>
                         </div>
 
+
                         {service.observations && (
                           <p className="service-observations">{service.observations}</p>
                         )}
 
+
                         <div className="service-actions">
+
                           {action && (
                             <button
                               type="button"
                               className="primary-action"
                               disabled={actionLoadingId === service.id}
-                              onClick={() =>
-                                updateServiceStatus(service.id, action.nextStatus)
-                              }
+                              onClick={() => updateServiceStatus(service.id, action.nextStatus)}
                             >
-                              {actionLoadingId === service.id
-                                ? "Updating..."
-                                : action.label}
+                              {actionLoadingId === service.id ? "Updating..." : action.label}
                             </button>
                           )}
+
 
                           <button
                             type="button"
@@ -325,16 +385,22 @@ export function ServiceStatusBoard({ role = "admin" }) {
                           >
                             Report issue
                           </button>
+
                         </div>
+
                       </article>
                     );
                   })
                 )}
+
               </div>
+
             </div>
           );
         })}
+
       </div>
+
     </section>
   );
 }

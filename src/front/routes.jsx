@@ -22,9 +22,6 @@ const Routes = createRoutesFromElements(
         <Route index element={<Home />} />
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
-        <Route path="/mechanics" element={<MechanicList />} />
-        <Route path="/vehicles" element={<VehicleList />} />
-
         {/* Esta ruta solo revisa el role y redirige a /admin o /mechanic */}
         <Route path="dashboard" element={<Dashboard />} />
 
@@ -43,6 +40,24 @@ const Routes = createRoutesFromElements(
             element={
                 <DashboardLayout allowedRole="admin">
                     <Customer />
+                </DashboardLayout>
+            }
+        />
+
+        <Route
+            path="admin/mechanics"
+            element={
+                <DashboardLayout allowedRole="admin">
+                    <MechanicList />
+                </DashboardLayout>
+            }
+        />
+
+        <Route
+            path="admin/vehicles"
+            element={
+                <DashboardLayout allowedRole="admin">
+                    <VehicleList />
                 </DashboardLayout>
             }
         />

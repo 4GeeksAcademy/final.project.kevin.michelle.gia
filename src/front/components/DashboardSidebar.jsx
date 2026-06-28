@@ -55,23 +55,15 @@ export const DashboardSidebar = ({ role, user, employee, onLogout }) => {
             </button>
 
             <nav className="dashboard-nav">
-              <button
-                type="button"
-                className="dashboard-sidebar-link disabled"
-                disabled
-              >
+              <NavLink to="/admin/mechanics" className={getNavClass}>
                 <Wrench size={18} />
                 <span>Mechanics</span>
-              </button>
+              </NavLink>
 
-              <button
-                type="button"
-                className="dashboard-sidebar-link disabled"
-                disabled
-              >
+              <NavLink to="/admin/vehicles" className={getNavClass}>
                 <Car size={18} />
                 <span>Vehicles</span>
-              </button>
+              </NavLink>
 
               <NavLink to="/admin/customers" className={getNavClass}>
                 <Users size={18} />

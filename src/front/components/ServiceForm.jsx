@@ -1,10 +1,39 @@
 import { useEffect, useState } from "react";
+import { CustomerForm } from "./CustomerForm";
+import { VehicleForm } from "./VehicleForm";
+import { ServiceDetailsForm } from "./ServiceDetailsForm";
 
-const RAW_BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:3001";
+const RAW_BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:3001";
 
 const API_BASE_URL = RAW_BACKEND_URL.endsWith("/api")
   ? RAW_BACKEND_URL
   : `${RAW_BACKEND_URL.replace(/\/$/, "")}/api`;
+
+const emptyCustomerForm = {
+  first_name: "",
+  last_name: "",
+  dni: "",
+  driving_license: "",
+  phone: "",
+  email: "",
+  address: ""
+};
+
+const emptyVehicleForm = {
+  plate: "",
+  vin: "",
+  brand: "",
+  model: "",
+  version: "",
+  year: "",
+  fuel_type: "gasoline",
+  power_hp: "",
+  engine_cc: "",
+  color: "",
+  mileage: "",
+  first_registration_date: ""
+};
 
 const emptyServiceForm = {
   vehicle_id: "",
@@ -48,6 +77,15 @@ const SERVICE_PRIORITIES = [
   { value: "urgent", label: "Urgent" }
 ];
 
+const FUEL_TYPES = [
+  { value: "gasoline", label: "Gasoline" },
+  { value: "diesel", label: "Diesel" },
+  { value: "hybrid", label: "Hybrid" },
+  { value: "plug_in_hybrid", label: "Plug-in hybrid" },
+  { value: "electric", label: "Electric" },
+  { value: "lpg", label: "LPG" }
+];
+
 function getAuthHeaders() {
   const token = localStorage.getItem("token");
 
@@ -61,12 +99,17 @@ function buildUrl(path) {
   return `${API_BASE_URL}${path}`;
 }
 
-function getVehicleLabel(vehicle) {
-  const vehicleName = `${vehicle.brand || ""} ${vehicle.model || ""}`.trim();
-  const plate = vehicle.plate ? ` · ${vehicle.plate}` : "";
-  const customer = vehicle.customer_name ? ` · ${vehicle.customer_name}` : "";
+function getCustomerLabel(customer) {
+  const fullName = `${customer.first_name || ""} ${customer.last_name || ""}`.trim();
 
-  return `${vehicleName || "Vehicle"}${plate}${customer}`;
+  return fullName || "Customer";
+}
+
+function getVehicleName(vehicle) {
+  const vehicleName = `${vehicle.brand || ""} ${vehicle.model || ""}`.trim();
+  const year = vehicle.year ? ` ${vehicle.year}` : "";
+
+  return `${vehicleName || "Vehicle"}${year}`;
 }
 
 function getMechanicLabel(mechanic) {
@@ -77,34 +120,64 @@ function getMechanicLabel(mechanic) {
 }
 
 export function ServiceForm({ onServiceCreated }) {
-  const [formData, setFormData] = useState(emptyServiceForm);
+  const [step, setStep] = useState(1);
+
+  const [customers, setCustomers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [mechanics, setMechanics] = useState([]);
 
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [selectedVehicle, setSelectedVehicle] = useState(null);
+
+  const [customerForm, setCustomerForm] = useState(emptyCustomerForm);
+  const [vehicleForm, setVehicleForm] = useState(emptyVehicleForm);
+  const [formData, setFormData] = useState(emptyServiceForm);
+
+  const [showCustomerForm, setShowCustomerForm] = useState(false);
+  const [showVehicleForm, setShowVehicleForm] = useState(false);
+
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingCustomer, setIsSavingCustomer] = useState(false);
+  const [isSavingVehicle, setIsSavingVehicle] = useState(false);
+  const [isSavingService, setIsSavingService] = useState(false);
 
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  const isBusy = isSavingCustomer || isSavingVehicle || isSavingService;
 
   const loadOptions = async () => {
     try {
       setIsLoadingOptions(true);
       setError("");
 
-      const [vehiclesResponse, mechanicsResponse] = await Promise.all([
-        fetch(buildUrl("/vehicles"), {
-          method: "GET",
-          headers: getAuthHeaders()
-        }),
-        fetch(buildUrl("/mechanics"), {
-          method: "GET",
-          headers: getAuthHeaders()
-        })
-      ]);
+      const [customersResponse, vehiclesResponse, mechanicsResponse] =
+        await Promise.all([
+          fetch(buildUrl("/customers"), {
+            method: "GET",
+            headers: getAuthHeaders()
+          }),
+          fetch(buildUrl("/vehicles"), {
+            method: "GET",
+            headers: getAuthHeaders()
+          }),
+          fetch(buildUrl("/mechanics"), {
+            method: "GET",
+            headers: getAuthHeaders()
+          })
+        ]);
 
+      const customersData = await customersResponse.json();
       const vehiclesData = await vehiclesResponse.json();
       const mechanicsData = await mechanicsResponse.json();
+
+      if (!customersResponse.ok) {
+        throw new Error(
+          customersData.error ||
+            customersData.message ||
+            "Could not load customers."
+        );
+      }
 
       if (!vehiclesResponse.ok) {
         throw new Error(
@@ -122,6 +195,7 @@ export function ServiceForm({ onServiceCreated }) {
         );
       }
 
+      setCustomers(customersData.customers || []);
       setVehicles(vehiclesData.vehicles || []);
       setMechanics(mechanicsData.mechanics || []);
     } catch (error) {
@@ -135,7 +209,37 @@ export function ServiceForm({ onServiceCreated }) {
     loadOptions();
   }, []);
 
-  const handleInputChange = (event) => {
+  const customerVehicles = selectedCustomer
+    ? vehicles.filter(
+        (vehicle) => Number(vehicle.customer_id) === Number(selectedCustomer.id)
+      )
+    : [];
+
+  const handleCustomerFormChange = (event) => {
+    const { name, value } = event.target;
+
+    setCustomerForm((currentData) => ({
+      ...currentData,
+      [name]: value
+    }));
+
+    setError("");
+    setSuccessMessage("");
+  };
+
+  const handleVehicleFormChange = (event) => {
+    const { name, value } = event.target;
+
+    setVehicleForm((currentData) => ({
+      ...currentData,
+      [name]: value
+    }));
+
+    setError("");
+    setSuccessMessage("");
+  };
+
+  const handleServiceFormChange = (event) => {
     const { name, value } = event.target;
 
     setFormData((currentData) => ({
@@ -147,14 +251,248 @@ export function ServiceForm({ onServiceCreated }) {
     setSuccessMessage("");
   };
 
+  const handleSelectCustomer = (event) => {
+    const customerId = Number(event.target.value);
+    const customer = customers.find(
+      (customer) => Number(customer.id) === customerId
+    );
+
+    setSelectedCustomer(customer || null);
+    setSelectedVehicle(null);
+
+    setFormData((currentData) => ({
+      ...currentData,
+      vehicle_id: "",
+      entry_mileage: ""
+    }));
+
+    setError("");
+    setSuccessMessage("");
+  };
+
+  const handleSelectVehicle = (event) => {
+    const vehicleId = Number(event.target.value);
+    const vehicle = vehicles.find(
+      (vehicle) => Number(vehicle.id) === vehicleId
+    );
+
+    setSelectedVehicle(vehicle || null);
+
+    setFormData((currentData) => ({
+      ...currentData,
+      vehicle_id: vehicle ? String(vehicle.id) : "",
+      entry_mileage: vehicle?.mileage ? String(vehicle.mileage) : ""
+    }));
+
+    setError("");
+    setSuccessMessage("");
+  };
+
+  const validateCustomerForm = () => {
+    if (!customerForm.first_name.trim()) {
+      return "Please enter the customer's first name.";
+    }
+
+    if (!customerForm.last_name.trim()) {
+      return "Please enter the customer's last name.";
+    }
+
+    if (!customerForm.dni.trim()) {
+      return "Please enter the customer's DNI/NIE.";
+    }
+
+    if (!customerForm.driving_license.trim()) {
+      return "Please enter the customer's driving license.";
+    }
+
+    if (!customerForm.phone.trim()) {
+      return "Please enter the customer's phone.";
+    }
+
+    return "";
+  };
+
+  const validateVehicleForm = () => {
+    if (!selectedCustomer) {
+      return "Please select or create a customer first.";
+    }
+
+    if (!vehicleForm.plate.trim()) {
+      return "Please enter the vehicle plate.";
+    }
+
+    if (!vehicleForm.brand.trim()) {
+      return "Please enter the vehicle brand.";
+    }
+
+    if (!vehicleForm.model.trim()) {
+      return "Please enter the vehicle model.";
+    }
+
+    if (!vehicleForm.fuel_type) {
+      return "Please select the vehicle fuel type.";
+    }
+
+    return "";
+  };
+
+  const handleCreateCustomer = async (event) => {
+    event.preventDefault();
+
+    setError("");
+    setSuccessMessage("");
+
+    const validationError = validateCustomerForm();
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setIsSavingCustomer(true);
+
+    try {
+      const payload = {
+        first_name: customerForm.first_name.trim(),
+        last_name: customerForm.last_name.trim(),
+        dni: customerForm.dni.trim(),
+        driving_license: customerForm.driving_license.trim(),
+        phone: customerForm.phone.trim(),
+        email: customerForm.email.trim() || null,
+        address: customerForm.address.trim() || null
+      };
+
+      const response = await fetch(buildUrl("/customers"), {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            data.message ||
+            "Could not create customer."
+        );
+      }
+
+      const newCustomer = data.customer;
+
+      setCustomers((currentCustomers) => [newCustomer, ...currentCustomers]);
+      setSelectedCustomer(newCustomer);
+      setSelectedVehicle(null);
+
+      setFormData((currentData) => ({
+        ...currentData,
+        vehicle_id: "",
+        entry_mileage: ""
+      }));
+
+      setCustomerForm(emptyCustomerForm);
+      setShowCustomerForm(false);
+      setSuccessMessage("Customer created successfully.");
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setIsSavingCustomer(false);
+    }
+  };
+
+  const handleCreateVehicle = async (event) => {
+    event.preventDefault();
+
+    setError("");
+    setSuccessMessage("");
+
+    const validationError = validateVehicleForm();
+
+    if (validationError) {
+      setError(validationError);
+
+      if (!selectedCustomer) {
+        setStep(1);
+      }
+
+      return;
+    }
+
+    setIsSavingVehicle(true);
+
+    try {
+      const payload = {
+        customer_id: selectedCustomer.id,
+        plate: vehicleForm.plate.trim().toUpperCase().replace(/[\s-]/g, ""),
+        vin: vehicleForm.vin.trim()
+          ? vehicleForm.vin.trim().toUpperCase()
+          : null,
+        brand: vehicleForm.brand.trim(),
+        model: vehicleForm.model.trim(),
+        version: vehicleForm.version.trim() || null,
+        year: vehicleForm.year ? Number(vehicleForm.year) : null,
+        fuel_type: vehicleForm.fuel_type,
+        power_hp: vehicleForm.power_hp ? Number(vehicleForm.power_hp) : null,
+        engine_cc: vehicleForm.engine_cc ? Number(vehicleForm.engine_cc) : null,
+        color: vehicleForm.color.trim() || null,
+        mileage: vehicleForm.mileage ? Number(vehicleForm.mileage) : 0,
+        first_registration_date: vehicleForm.first_registration_date || null
+      };
+
+      const response = await fetch(buildUrl("/vehicles"), {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            data.message ||
+            "Could not create vehicle."
+        );
+      }
+
+      const newVehicle = data.vehicle;
+
+      setVehicles((currentVehicles) => [newVehicle, ...currentVehicles]);
+      setSelectedVehicle(newVehicle);
+
+      setFormData((currentData) => ({
+        ...currentData,
+        vehicle_id: String(newVehicle.id),
+        entry_mileage: newVehicle.mileage
+          ? String(newVehicle.mileage)
+          : currentData.entry_mileage
+      }));
+
+      setVehicleForm(emptyVehicleForm);
+      setShowVehicleForm(false);
+      setSuccessMessage("Vehicle created successfully.");
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setIsSavingVehicle(false);
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
     setError("");
     setSuccessMessage("");
 
-    if (!formData.vehicle_id) {
-      setError("Please select a vehicle.");
+    if (!selectedCustomer) {
+      setError("Please select or create a customer.");
+      setStep(1);
+      return;
+    }
+
+    if (!selectedVehicle || !formData.vehicle_id) {
+      setError("Please select or create a vehicle.");
+      setStep(2);
       return;
     }
 
@@ -163,7 +501,12 @@ export function ServiceForm({ onServiceCreated }) {
       return;
     }
 
-    setIsSaving(true);
+    if (!formData.service_type) {
+      setError("Please select a service type.");
+      return;
+    }
+
+    setIsSavingService(true);
 
     try {
       const payload = {
@@ -197,6 +540,11 @@ export function ServiceForm({ onServiceCreated }) {
       }
 
       setFormData(emptyServiceForm);
+      setSelectedCustomer(null);
+      setSelectedVehicle(null);
+      setShowCustomerForm(false);
+      setShowVehicleForm(false);
+      setStep(1);
       setSuccessMessage("Service ticket created successfully.");
 
       if (onServiceCreated) {
@@ -205,29 +553,60 @@ export function ServiceForm({ onServiceCreated }) {
     } catch (error) {
       setError(error.message);
     } finally {
-      setIsSaving(false);
+      setIsSavingService(false);
     }
   };
 
   return (
-    <section className="bg-white border rounded-4 shadow-sm p-4 mb-4">
+    <section className="service-ticket-card">
       <div className="d-flex flex-column flex-md-row justify-content-between gap-3 mb-4">
         <div>
-          <p className="text-uppercase text-muted small fw-semibold mb-2">
-            Service tickets
-          </p>
-
-          <h2 className="h4 fw-bold mb-2">
-            Create repair ticket
-          </h2>
-
-          <p className="text-muted mb-0">
-            Create a new repair or maintenance task and assign it to a mechanic.
-          </p>
+          <h2 className="h4 fw-bold mb-2">Create repair ticket</h2>
         </div>
-
-       
       </div>
+
+      <div className="service-ticket-steps">
+        <button
+          type="button"
+          className={`service-ticket-step ${step === 1 ? "active" : ""}`}
+          onClick={() => setStep(1)}
+          disabled={isBusy}
+        >
+          Step 1
+        </button>
+
+        <button
+          type="button"
+          className={`service-ticket-step ${step === 2 ? "active" : ""}`}
+          onClick={() => setStep(2)}
+          disabled={!selectedCustomer || isBusy}
+        >
+          Step 2
+        </button>
+
+        <button
+          type="button"
+          className={`service-ticket-step ${step === 3 ? "active" : ""}`}
+          onClick={() => setStep(3)}
+          disabled={!selectedCustomer || !selectedVehicle || isBusy}
+        >
+          Step 3
+        </button>
+      </div>
+
+      {isLoadingOptions && (
+        <div
+          className="alert alert-secondary rounded-4 d-flex align-items-center"
+          role="alert"
+        >
+          <span
+            className="spinner-border spinner-border-sm me-2"
+            role="status"
+            aria-hidden="true"
+          ></span>
+          Loading customers, vehicles and mechanics...
+        </div>
+      )}
 
       {error && (
         <div className="alert alert-danger rounded-4" role="alert">
@@ -241,205 +620,75 @@ export function ServiceForm({ onServiceCreated }) {
         </div>
       )}
 
-      {vehicles.length === 0 && (
-        <div className="alert alert-warning rounded-4">
-          No vehicles found. Create a customer and a vehicle before creating a
-          service ticket.
-        </div>
+      {step === 1 && (
+        <CustomerForm
+          customers={customers}
+          selectedCustomer={selectedCustomer}
+          customerForm={customerForm}
+          showCustomerForm={showCustomerForm}
+          isBusy={isBusy}
+          isSavingCustomer={isSavingCustomer}
+          onSelectCustomer={handleSelectCustomer}
+          onCustomerFormChange={handleCustomerFormChange}
+          onCreateCustomer={handleCreateCustomer}
+          onToggleCustomerForm={() =>
+            setShowCustomerForm((currentValue) => !currentValue)
+          }
+          onContinue={() => setStep(2)}
+          getCustomerLabel={getCustomerLabel}
+        />
       )}
 
-      {mechanics.length === 0 && (
-        <div className="alert alert-warning rounded-4">
-          No mechanics found. Create a mechanic account before assigning tickets.
-        </div>
+      {step === 2 && (
+        <VehicleForm
+          selectedCustomer={selectedCustomer}
+          selectedVehicle={selectedVehicle}
+          customerVehicles={customerVehicles}
+          vehicleForm={vehicleForm}
+          showVehicleForm={showVehicleForm}
+          isBusy={isBusy}
+          isSavingVehicle={isSavingVehicle}
+          onSelectVehicle={handleSelectVehicle}
+          onVehicleFormChange={handleVehicleFormChange}
+          onCreateVehicle={handleCreateVehicle}
+          onToggleVehicleForm={() =>
+            setShowVehicleForm((currentValue) => !currentValue)
+          }
+          onClearVehicleForm={() => {
+            setVehicleForm(emptyVehicleForm);
+            setSelectedVehicle(null);
+            setFormData((currentData) => ({
+              ...currentData,
+              vehicle_id: "",
+              entry_mileage: ""
+            }));
+          }}
+          onBack={() => setStep(1)}
+          onContinue={() => setStep(3)}
+          getCustomerLabel={getCustomerLabel}
+          getVehicleName={getVehicleName}
+          fuelTypes={FUEL_TYPES}
+        />
       )}
 
-      <form onSubmit={handleSubmit}>
-        <div className="row g-3">
-          <div className="col-12 col-lg-6">
-            <label className="form-label fw-semibold" htmlFor="vehicle_id">
-              Vehicle
-            </label>
-
-            <select
-              id="vehicle_id"
-              name="vehicle_id"
-              className="form-select py-2 px-3"
-              value={formData.vehicle_id}
-              onChange={handleInputChange}
-              required
-              disabled={vehicles.length === 0}
-            >
-              <option value="">Select a vehicle</option>
-
-              {vehicles.map((vehicle) => (
-                <option key={vehicle.id} value={vehicle.id}>
-                  {getVehicleLabel(vehicle)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="col-12 col-lg-6">
-            <label className="form-label fw-semibold" htmlFor="employee_id">
-              Assigned mechanic
-            </label>
-
-            <select
-              id="employee_id"
-              name="employee_id"
-              className="form-select py-2 px-3"
-              value={formData.employee_id}
-              onChange={handleInputChange}
-              disabled={mechanics.length === 0}
-            >
-              <option value="">Unassigned</option>
-
-              {mechanics.map((mechanic) => (
-                <option key={mechanic.id} value={mechanic.id}>
-                  {getMechanicLabel(mechanic)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="col-12 col-lg-8">
-            <label className="form-label fw-semibold" htmlFor="title">
-              Title
-            </label>
-
-            <input
-              id="title"
-              type="text"
-              name="title"
-              className="form-control py-2 px-3"
-              value={formData.title}
-              onChange={handleInputChange}
-              placeholder="Example: Engine diagnosis"
-              required
-            />
-          </div>
-
-          <div className="col-12 col-lg-4">
-            <label className="form-label fw-semibold" htmlFor="entry_mileage">
-              Entry mileage
-            </label>
-
-            <input
-              id="entry_mileage"
-              type="number"
-              name="entry_mileage"
-              className="form-control py-2 px-3"
-              value={formData.entry_mileage}
-              onChange={handleInputChange}
-              placeholder="120000"
-              min="0"
-            />
-          </div>
-
-          <div className="col-12 col-md-4">
-            <label className="form-label fw-semibold" htmlFor="service_type">
-              Service type
-            </label>
-
-            <select
-              id="service_type"
-              name="service_type"
-              className="form-select py-2 px-3"
-              value={formData.service_type}
-              onChange={handleInputChange}
-            >
-              {SERVICE_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="col-12 col-md-4">
-            <label className="form-label fw-semibold" htmlFor="status">
-              Initial status
-            </label>
-
-            <select
-              id="status"
-              name="status"
-              className="form-select py-2 px-3"
-              value={formData.status}
-              onChange={handleInputChange}
-            >
-              {SERVICE_STATUSES.map((status) => (
-                <option key={status.value} value={status.value}>
-                  {status.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="col-12 col-md-4">
-            <label className="form-label fw-semibold" htmlFor="priority">
-              Priority
-            </label>
-
-            <select
-              id="priority"
-              name="priority"
-              className="form-select py-2 px-3"
-              value={formData.priority}
-              onChange={handleInputChange}
-            >
-              {SERVICE_PRIORITIES.map((priority) => (
-                <option key={priority.value} value={priority.value}>
-                  {priority.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="col-12">
-            <label className="form-label fw-semibold" htmlFor="description">
-              Description
-            </label>
-
-            <textarea
-              id="description"
-              name="description"
-              className="form-control py-2 px-3"
-              value={formData.description}
-              onChange={handleInputChange}
-              rows="3"
-              placeholder="Describe the customer complaint or the requested work."
-            ></textarea>
-          </div>
-
-          <div className="col-12">
-            <label className="form-label fw-semibold" htmlFor="observations">
-              Observations
-            </label>
-
-            <textarea
-              id="observations"
-              name="observations"
-              className="form-control py-2 px-3"
-              value={formData.observations}
-              onChange={handleInputChange}
-              rows="3"
-              placeholder="Internal notes for the workshop team."
-            ></textarea>
-          </div>
-
-          <div className="col-12">
-            <button
-              type="submit"
-              className="btn btn-dark w-100 py-3 fw-bold"
-              disabled={isSaving || vehicles.length === 0}
-            >
-              {isSaving ? "Creating ticket..." : "Create service ticket"}
-            </button>
-          </div>
-        </div>
-      </form>
+      {step === 3 && (
+        <ServiceDetailsForm
+          selectedCustomer={selectedCustomer}
+          selectedVehicle={selectedVehicle}
+          mechanics={mechanics}
+          formData={formData}
+          isSavingService={isSavingService}
+          onServiceFormChange={handleServiceFormChange}
+          onSubmit={handleSubmit}
+          onBack={() => setStep(2)}
+          getCustomerLabel={getCustomerLabel}
+          getVehicleName={getVehicleName}
+          getMechanicLabel={getMechanicLabel}
+          serviceTypes={SERVICE_TYPES}
+          serviceStatuses={SERVICE_STATUSES}
+          servicePriorities={SERVICE_PRIORITIES}
+        />
+      )}
     </section>
   );
 }

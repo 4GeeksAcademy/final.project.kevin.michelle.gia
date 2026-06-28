@@ -1,7 +1,5 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
-import { AdminDashboard } from "./AdminDashboard";
-import { MechanicDashboard } from "./MechanicDashboard";
 
 const getStoredObject = (key) => {
   const storedValue = localStorage.getItem(key);
@@ -24,18 +22,18 @@ export const Dashboard = () => {
   const user = getStoredObject("user");
   const employee = getStoredObject("employee");
 
-  if (!token || !user || !employee) {
+  if (!token || !user) {
     return <Navigate to="/login" replace />;
   }
 
-  const role = employee.role ? employee.role.toLowerCase() : "";
+  const role = (employee?.role || user?.role || "").toLowerCase();
 
   if (role === "admin") {
-    return <AdminDashboard user={user} />;
+    return <Navigate to="/admin" replace />;
   }
 
   if (role === "mechanic") {
-    return <MechanicDashboard user={user} />;
+    return <Navigate to="/mechanic" replace />;
   }
 
   return <Navigate to="/login" replace />;

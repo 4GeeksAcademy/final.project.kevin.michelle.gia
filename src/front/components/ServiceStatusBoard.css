@@ -1,53 +1,5 @@
 .status-board {
   width: 100%;
-  padding: 24px;
-  border-radius: 24px;
-  background: #f8fafc;
-}
-
-.status-board-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.status-board-kicker {
-  margin: 0 0 4px;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #64748b;
-  font-weight: 700;
-}
-
-.status-board-header h2 {
-  margin: 0;
-  font-size: 1.6rem;
-  color: #0f172a;
-}
-
-.refresh-button,
-.primary-action,
-.secondary-action {
-  border: none;
-  cursor: pointer;
-  border-radius: 12px;
-  font-weight: 700;
-  transition: transform 0.15s ease, opacity 0.15s ease;
-}
-
-.refresh-button:hover,
-.primary-action:hover,
-.secondary-action:hover {
-  transform: translateY(-1px);
-}
-
-.refresh-button {
-  padding: 10px 16px;
-  background: #0f172a;
-  color: white;
 }
 
 .status-board-error {
@@ -55,53 +7,29 @@
   border-radius: 14px;
   background: #fee2e2;
   color: #991b1b;
-  font-weight: 600;
+  font-weight: 700;
+  margin-bottom: 18px;
 }
 
 .status-board-message {
   padding: 24px;
   color: #475569;
-}
-
-.status-board-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.status-stat-card {
-  padding: 16px;
-  border-radius: 18px;
-  background: white;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-}
-
-.status-stat-card span {
-  display: block;
-  color: #64748b;
-  text-transform: capitalize;
-  font-size: 0.85rem;
-  margin-bottom: 6px;
-}
-
-.status-stat-card strong {
-  font-size: 1.6rem;
-  color: #0f172a;
+  font-weight: 600;
 }
 
 .status-board-columns {
   display: grid;
-  grid-template-columns: repeat(4, minmax(240px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(4, minmax(250px, 1fr));
+  gap: 18px;
   overflow-x: auto;
   padding-bottom: 8px;
 }
 
 .status-column {
-  min-width: 240px;
-  background: #e2e8f0;
-  border-radius: 20px;
+  min-width: 250px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
   padding: 14px;
 }
 
@@ -109,12 +37,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  padding: 2px 2px 0;
 }
 
 .status-column-header h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.98rem;
+  font-weight: 900;
   color: #0f172a;
 }
 
@@ -124,9 +54,11 @@
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background: white;
+  background: #ffffff;
   color: #0f172a;
-  font-weight: 800;
+  font-weight: 900;
+  font-size: 0.8rem;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
 }
 
 .status-column-list {
@@ -138,17 +70,20 @@
 .empty-column {
   margin: 0;
   padding: 18px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.6);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
   color: #64748b;
   text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .service-card {
   padding: 16px;
-  border-radius: 18px;
-  background: white;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.05);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
 }
 
 .service-card-top {
@@ -156,16 +91,17 @@
   justify-content: space-between;
   gap: 8px;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .status-pill,
 .priority-pill {
   border-radius: 999px;
   padding: 5px 9px;
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.7rem;
+  font-weight: 900;
   text-transform: capitalize;
+  line-height: 1;
 }
 
 .status-pending {
@@ -203,6 +139,11 @@
   color: #334155;
 }
 
+.status-cancelled {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .priority-low {
   background: #e2e8f0;
   color: #334155;
@@ -223,89 +164,124 @@
   color: #991b1b;
 }
 
-.service-card h4 {
+.service-vehicle-title {
   margin: 0 0 6px;
   font-size: 1rem;
+  font-weight: 900;
   color: #0f172a;
-}
-
-.vehicle-line {
-  margin: 0 0 8px;
-  color: #334155;
-  font-weight: 700;
+  line-height: 1.25;
 }
 
 .service-title {
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   color: #475569;
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .service-meta {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  font-size: 0.82rem;
-  margin-bottom: 6px;
+  font-size: 0.8rem;
+  margin-bottom: 7px;
 }
 
 .service-meta span {
   color: #64748b;
+  font-weight: 700;
 }
 
 .service-meta strong {
   color: #0f172a;
   text-align: right;
+  font-weight: 800;
 }
 
 .service-observations {
   margin: 12px 0 0;
   padding: 10px;
-  border-radius: 12px;
-  background: #f1f5f9;
+  border-radius: 14px;
+  background: #f8fafc;
   color: #334155;
-  font-size: 0.85rem;
-}
-
-.service-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.primary-action,
-.secondary-action {
-  flex: 1;
-  padding: 10px;
   font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
-.primary-action {
+.service-card-actions,
+.service-status-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.card-action,
+.status-action {
+  border: 0;
+  cursor: pointer;
+  border-radius: 12px;
+  padding: 10px 9px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+}
+
+.card-action:hover,
+.status-action:hover {
+  transform: translateY(-1px);
+}
+
+.details-action {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.report-action {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.edit-action {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.previous-action {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.next-action {
   background: #16a34a;
-  color: white;
+  color: #ffffff;
 }
 
-.secondary-action {
-  background: #f1f5f9;
-  color: #0f172a;
-}
-
-.primary-action:disabled,
-.secondary-action:disabled {
-  opacity: 0.6;
+.card-action:disabled,
+.status-action:disabled {
+  opacity: 0.55;
   cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 1100px) {
+  .status-board-columns {
+    grid-template-columns: repeat(4, 270px);
+  }
 }
 
 @media (max-width: 900px) {
-  .status-board {
-    padding: 16px;
-  }
-
   .status-board-columns {
     grid-template-columns: repeat(4, 260px);
   }
 
-  .status-board-header {
-    align-items: flex-start;
-    flex-direction: column;
+  .service-card {
+    padding: 14px;
   }
 }

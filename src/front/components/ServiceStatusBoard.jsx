@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, ArrowRight, Eye, Flag, Pencil } from "lucide-react";
 import "./ServiceStatusBoard.css";
 
 const RAW_BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:3001";
@@ -41,32 +43,15 @@ const STATUS_LABELS = {
   cancelled: "Cancelled",
 };
 
-const STATUS_ACTIONS = {
-  pending: {
-    label: "Start repair",
-    nextStatus: "in_repair",
-  },
-  diagnosis: {
-    label: "Start repair",
-    nextStatus: "in_repair",
-  },
-  budget_pending: {
-    label: "Waiting parts",
-    nextStatus: "waiting_parts",
-  },
-  waiting_parts: {
-    label: "Start repair",
-    nextStatus: "in_repair",
-  },
-  in_repair: {
-    label: "Ready for pickup",
-    nextStatus: "ready_to_deliver",
-  },
-  ready_to_deliver: {
-    label: "Mark as delivered",
-    nextStatus: "delivered",
-  },
-};
+const STATUS_ORDER = [
+  "pending",
+  "diagnosis",
+  "budget_pending",
+  "waiting_parts",
+  "in_repair",
+  "ready_to_deliver",
+  "delivered",
+];
 
 function buildUrl(path) {
   return `${API_BASE_URL}${path}`;
@@ -102,9 +87,40 @@ function normalizeAdminServices(servicesByStatus) {
   );
 }
 
+function getPreviousStatus(status) {
+  const currentIndex = STATUS_ORDER.indexOf(status);
+
+  if (currentIndex <= 0) {
+    return null;
+  }
+
+  return STATUS_ORDER[currentIndex - 1];
+}
+
+function getNextStatus(status) {
+  const currentIndex = STATUS_ORDER.indexOf(status);
+
+  if (currentIndex === -1 || currentIndex >= STATUS_ORDER.length - 1) {
+    return null;
+  }
+
+  return STATUS_ORDER[currentIndex + 1];
+}
+
+function getVehicleTitle(service) {
+  const brand = service.vehicle_brand || "";
+  const model = service.vehicle_model || "";
+  const plate = service.vehicle_plate ? ` · ${service.vehicle_plate}` : "";
+
+  const vehicleName = `${brand} ${model}`.trim();
+
+  return `${vehicleName || "Unknown vehicle"}${plate}`;
+}
+
 export function ServiceStatusBoard({ role = "admin" }) {
+  const navigate = useNavigate();
+
   const [services, setServices] = useState([]);
-  const [stats, setStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [error, setError] = useState("");
@@ -131,10 +147,8 @@ export function ServiceStatusBoard({ role = "admin" }) {
 
       if (isMechanic) {
         setServices(data.services || []);
-        setStats(data.stats || null);
       } else {
         setServices(normalizeAdminServices(data.services_by_status));
-        setStats(data.stats || null);
       }
     } catch (error) {
       setError(error.message);
@@ -157,7 +171,7 @@ export function ServiceStatusBoard({ role = "admin" }) {
     }, {});
   }, [services]);
 
-  async function updateServiceStatus(serviceId, nextStatus) {
+  async function updateServiceStatus(serviceId, newStatus) {
     try {
       setActionLoadingId(serviceId);
       setError("");
@@ -166,7 +180,7 @@ export function ServiceStatusBoard({ role = "admin" }) {
         method: "PATCH",
         headers: getAuthHeaders(),
         body: JSON.stringify({
-          status: nextStatus,
+          status: newStatus,
           note: "Status updated from dashboard",
         }),
       });
@@ -216,37 +230,21 @@ export function ServiceStatusBoard({ role = "admin" }) {
     }
   }
 
+  function goToServiceDetails(serviceId) {
+    const path = isMechanic
+      ? `/mechanic/services/${serviceId}`
+      : `/admin/services/${serviceId}`;
+
+    navigate(path);
+  }
+
   if (isLoading) {
     return <p className="status-board-message">Loading services...</p>;
   }
 
   return (
     <section className="status-board">
-      <div className="status-board-header">
-        <div>
-          <p className="status-board-kicker">
-            {isMechanic ? "Mechanic dashboard" : "Coordinator dashboard"}
-          </p>
-          <h2>Workshop status board</h2>
-        </div>
-
-        <button className="refresh-button" type="button" onClick={fetchServices}>
-          Refresh
-        </button>
-      </div>
-
       {error && <p className="status-board-error">{error}</p>}
-
-      {stats && (
-        <div className="status-board-stats">
-          {Object.entries(stats).map(([key, value]) => (
-            <article className="status-stat-card" key={key}>
-              <span>{key.replaceAll("_", " ")}</span>
-              <strong>{value}</strong>
-            </article>
-          ))}
-        </div>
-      )}
 
       <div className="status-board-columns">
         {BOARD_COLUMNS.map((column) => {
@@ -264,7 +262,9 @@ export function ServiceStatusBoard({ role = "admin" }) {
                   <p className="empty-column">No services here.</p>
                 ) : (
                   columnServices.map((service) => {
-                    const action = STATUS_ACTIONS[service.status];
+                    const previousStatus = getPreviousStatus(service.status);
+                    const nextStatus = getNextStatus(service.status);
+                    const isUpdating = actionLoadingId === service.id;
 
                     return (
                       <article className="service-card" key={service.id}>
@@ -273,57 +273,97 @@ export function ServiceStatusBoard({ role = "admin" }) {
                             {STATUS_LABELS[service.status] || service.status}
                           </span>
 
-                          <span className={`priority-pill priority-${service.priority}`}>
+                          <span
+                            className={`priority-pill priority-${
+                              service.priority || "normal"
+                            }`}
+                          >
                             {service.priority || "normal"}
                           </span>
                         </div>
 
-                        <h4>{service.customer_name || "Unknown customer"}</h4>
+                        <h4 className="service-vehicle-title">
+                          {getVehicleTitle(service)}
+                        </h4>
 
-                        <p className="vehicle-line">
-                          {service.vehicle_brand} {service.vehicle_model}
-                          {service.vehicle_plate ? ` · ${service.vehicle_plate}` : ""}
+                        <p className="service-title">
+                          {service.title || "No service title"}
                         </p>
 
-                        <p className="service-title">{service.title}</p>
+                        <div className="service-meta">
+                          <span>Customer</span>
+                          <strong>{service.customer_name || "Unknown customer"}</strong>
+                        </div>
 
                         <div className="service-meta">
-                          <span>Mechanic:</span>
+                          <span>Mechanic</span>
                           <strong>{service.employee_name || "Unassigned"}</strong>
                         </div>
 
                         <div className="service-meta">
-                          <span>Entry date:</span>
+                          <span>Entry date</span>
                           <strong>{formatDate(service.start_date)}</strong>
                         </div>
 
                         {service.observations && (
-                          <p className="service-observations">{service.observations}</p>
+                          <p className="service-observations">
+                            {service.observations}
+                          </p>
                         )}
 
-                        <div className="service-actions">
-                          {action && (
+                        <div className="service-card-actions">
+                          <button
+                            type="button"
+                            className="card-action details-action icon-only-action"
+                            title="Details"
+                            disabled={isUpdating}
+                            onClick={() => goToServiceDetails(service.id)}
+                          >
+                            <Eye size={16} />
+                          </button>
+
+                          {isMechanic ? (
                             <button
                               type="button"
-                              className="primary-action"
-                              disabled={actionLoadingId === service.id}
-                              onClick={() =>
-                                updateServiceStatus(service.id, action.nextStatus)
-                              }
+                              className="card-action report-action icon-only-action"
+                              title="Report issue"
+                              disabled={isUpdating}
+                              onClick={() => reportIssue(service.id)}
                             >
-                              {actionLoadingId === service.id
-                                ? "Updating..."
-                                : action.label}
+                              <Flag size={16} />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="card-action edit-action icon-only-action"
+                              title="Edit service"
+                              disabled={isUpdating}
+                              onClick={() => goToServiceDetails(service.id)}
+                            >
+                              <Pencil size={16} />
                             </button>
                           )}
+                        </div>
+
+                        <div className="service-status-actions">
+                          <button
+                            type="button"
+                            className="status-action previous-action icon-only-action"
+                            title="Previous status"
+                            disabled={!previousStatus || isUpdating}
+                            onClick={() => updateServiceStatus(service.id, previousStatus)}
+                          >
+                            <ArrowLeft size={16} />
+                          </button>
 
                           <button
                             type="button"
-                            className="secondary-action"
-                            disabled={actionLoadingId === service.id}
-                            onClick={() => reportIssue(service.id)}
+                            className="status-action next-action icon-only-action"
+                            title="Next status"
+                            disabled={!nextStatus || isUpdating}
+                            onClick={() => updateServiceStatus(service.id, nextStatus)}
                           >
-                            Report issue
+                            <ArrowRight size={16} />
                           </button>
                         </div>
                       </article>

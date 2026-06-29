@@ -1,0 +1,308 @@
+/* =========================
+   GLOBAL
+========================= */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f5f6f7;
+}
+
+/* =========================
+   DASHBOARD LAYOUT
+========================= */
+
+.dashboard-shell {
+  min-height: 100vh;
+  display: flex;
+  background-color: #f5f6f7;
+}
+
+.dashboard-main {
+  flex: 1;
+  min-height: 100vh;
+  padding: 32px clamp(28px, 6vw, 76px);
+  background-color: #f5f6f7;
+  overflow-x: hidden;
+}
+
+.dashboard-sidebar {
+  width: 250px;
+  min-height: 100vh;
+  flex-shrink: 0;
+  background: #1f2529;
+  color: #ffffff;
+  padding: 30px 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.dashboard-brand {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #ffffff;
+  text-align: left;
+  padding: 0;
+  margin-bottom: 4px;
+}
+
+.dashboard-welcome {
+  display: block;
+  font-size: 0.85rem;
+  color: #aeb6bd;
+  font-weight: 600;
+}
+
+.dashboard-user-name {
+  display: block;
+  font-size: 1.45rem;
+  font-weight: 900;
+  line-height: 1.1;
+  margin-top: 3px;
+}
+
+.dashboard-role {
+  color: #8f99a3;
+  font-size: 0.8rem;
+  margin-bottom: 22px;
+}
+
+.dashboard-home-link,
+.dashboard-sidebar-link,
+.dashboard-logout,
+.dashboard-new-task {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 13px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  text-decoration: none;
+  font-weight: 800;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.dashboard-home-link {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  margin-bottom: 14px;
+}
+
+.dashboard-home-link:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.dashboard-new-task {
+  background: #ffc107;
+  color: #111827;
+  margin-bottom: 24px;
+  justify-content: center;
+}
+
+.dashboard-new-task:hover {
+  background: #ffca2c;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(255, 193, 7, 0.22);
+}
+
+.dashboard-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dashboard-sidebar-link {
+  background: rgba(255, 255, 255, 0.07);
+  color: #d7dde2;
+  font-size: 0.95rem;
+}
+
+.dashboard-sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  transform: translateX(2px);
+}
+
+.dashboard-sidebar-link.active {
+  background: #ffffff;
+  color: #1f2529;
+}
+
+.dashboard-sidebar-link.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dashboard-logout {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.dashboard-logout:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* =========================
+   ADMIN DASHBOARD
+========================= */
+
+.admin-dashboard-page {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.admin-dashboard-header {
+  margin-bottom: 42px;
+}
+
+.admin-dashboard-header h1 {
+  font-size: clamp(2rem, 3vw, 3rem);
+  font-weight: 900;
+  color: #20252b;
+  margin: 0;
+  letter-spacing: -0.04em;
+}
+
+.admin-board-card {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 28px;
+  padding: 34px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(15, 23, 42, 0.05);
+}
+
+/* =========================
+   SERVICE TICKET PAGE
+========================= */
+
+.service-ticket-page {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.service-ticket-header {
+  margin-bottom: 20px;
+}
+
+.service-ticket-header h1 {
+  font-size: clamp(34px, 4vw, 48px);
+  font-weight: 900;
+  color: #1f272b;
+  margin-bottom: 6px;
+  letter-spacing: -0.04em;
+}
+
+.service-ticket-header p {
+  color: #6b7280;
+  margin-bottom: 0;
+}
+
+.service-ticket-back-button {
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-weight: 700;
+  color: #1f272b;
+  margin-bottom: 18px;
+  cursor: pointer;
+}
+
+.service-ticket-back-button:hover {
+  background-color: #f3f4f6;
+}
+
+.service-ticket-card {
+  background-color: #ffffff;
+  border: 1px solid #eeeeee;
+  border-radius: 2px;
+  padding: 28px;
+  margin-bottom: 32px;
+}
+
+.service-ticket-card p {
+  color: #6b7280;
+}
+
+.service-ticket-steps {
+  display: flex;
+  gap: 6px;
+  margin: 22px 0 28px;
+  flex-wrap: wrap;
+}
+
+.service-ticket-step {
+  border: 2px solid #2b2f32;
+  background-color: #ffffff;
+  color: #2b2f32;
+  padding: 7px 18px;
+  border-radius: 4px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.service-ticket-step.active {
+  background-color: #212529;
+  color: #ffffff;
+}
+
+.service-ticket-step:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.service-ticket-card .form-select,
+.service-ticket-card .form-control {
+  border-radius: 2px;
+  min-height: 44px;
+}
+
+.service-ticket-card .btn-dark {
+  background-color: #ffc107;
+  border-color: #ffc107;
+  color: #111827;
+  font-weight: 800;
+}
+
+.service-ticket-card .btn-dark:hover {
+  background-color: #e0a800;
+  border-color: #e0a800;
+  color: #111827;
+}
+
+.service-ticket-card .btn-outline-dark {
+  border-radius: 2px;
+  font-weight: 700;
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 768px) {
+  .dashboard-shell {
+    flex-direction: column;
+  }
+
+  .dashboard-sidebar {
+    width: 100%;
+    min-height: auto;
+  }
+
+  .dashboard-main {
+    padding: 24px 18px;
+  }
+
+  .service-ticket-card {
+    padding: 20px;
+  }
+}

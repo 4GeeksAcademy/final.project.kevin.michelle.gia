@@ -212,16 +212,20 @@ export default function CustomerList() {
     };
 
     const handleSelectAll = (event) => {
-        if (event.target.checked) {
-            const allSelected = {};
-            paginatedData.forEach((row) => {
-                allSelected[row.id] = true;
-            });
-            setSelectedRows(allSelected);
-        } else {
-            setSelectedRows({});
-        }
-    };
+    if (event.target.checked) {
+        const allSelected = { ...selectedRows }; 
+        paginatedData.forEach((row) => {
+            allSelected[row.id] = true;
+        });
+        setSelectedRows(allSelected);
+    } else {
+        const newSelected = { ...selectedRows };
+        paginatedData.forEach((row) => {
+            delete newSelected[row.id];
+        });
+        setSelectedRows(newSelected);
+    }
+};
 
     const handleSelectRow = (id) => {
         setSelectedRows((prev) => ({
@@ -238,6 +242,11 @@ export default function CustomerList() {
             [name]: value
         }));
     };
+
+    const handleCloseModal = () => {
+    setShowAddModal(false);
+    setNewCustomer(initialFormState);
+};
 
     const handleSaveCustomer = async (event) => {
         event.preventDefault();
@@ -744,7 +753,7 @@ export default function CustomerList() {
                                     <button
                                         type="button"
                                         className="btn-close btn-close-white"
-                                        onClick={() => setShowAddModal(false)}
+                                        onClick={handleCloseModal}
                                         aria-label="Close"
                                     ></button>
                                 </div>
@@ -842,12 +851,12 @@ export default function CustomerList() {
 
                                     <div className="modal-footer bg-light">
                                         <button
-                                            type="button"
-                                            className="btn btn-secondary"
-                                            onClick={() => setShowAddModal(false)}
-                                        >
-                                            Cancel
-                                        </button>
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={handleCloseModal}
+                                    >
+                                        Cancel
+                                    </button>
 
                                         <button
                                             type="submit"

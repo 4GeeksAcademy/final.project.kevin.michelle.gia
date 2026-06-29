@@ -1,213 +1,127 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import styles from "./Login.module.css";
+import { createWorkshop } from "../services/api";
 
-export const Register = () => {
-  const [showPassword, setShowPassword] = useState(false);
-  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+const initialState = {
+  company_name: "", cif: "", phone: "", email: "",
+  address: "", city: "", postal_code: "", province: "",
+  country: "España", website: "",
+  manager_first_name: "", manager_last_name: "", manager_dni: "",
+  manager_phone: "", manager_email: "", manager_password: "",
+  manager_password_confirm: ""
+};
 
-  const [formData, setFormData] = useState({
-    company_name: "",
-    cif: "",
-    phone: "",
-    email: "",
-    password: "",
-    password_confirm: "",
-    role: "admin"
-  });
+const patterns = {
+  cif: /^[A-HJ-NP-SUVW]\d{7}[0-9A-J]$/i,
+  dni: /^\d{8}[A-HJ-NP-TV-Z]$/i,
+  postal_code: /^\d{5}$/,
+  phone: /^(\+34)?[6789]\d{8}$/,
+  email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+};
 
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+export const RegisterWorkshop = () => {
+  const [form, setForm] = useState(initialState);
+  const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [serverMsg, setServerMsg] = useState("");
   const navigate = useNavigate();
 
-  const handleInputChange = (event) => {
-    const { name, value } = event.target;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value
-    }));
-
-    setError("");
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleRegister = async (event) => {
+  const validate = () => {
+    const e = {};
+    if (!form.company_name.trim()) e.company_name = "Nombre obligatorio";
+    if (!patterns.cif.test(form.cif)) e.cif = "CIF inválido (ej: B12345678)";
+    if (!patterns.phone.test(form.phone)) e.phone = "Teléfono inválido";
+    if (!patterns.email.test(form.email)) e.email = "Email inválido";
+    if (!form.address.trim()) e.address = "Dirección obligatoria";
+    if (!form.city.trim()) e.city = "Ciudad obligatoria";
+    if (!patterns.postal_code.test(form.postal_code)) e.postal_code = "CP de 5 dígitos";
+    if (!form.province.trim()) e.province = "Provincia obligatoria";
+    if (!form.manager_first_name.trim()) e.manager_first_name = "Nombre obligatorio";
+    if (!form.manager_last_name.trim()) e.manager_last_name = "Apellidos obligatorios";
+    if (!patterns.dni.test(form.manager_dni)) e.manager_dni = "DNI inválido (ej: 12345678A)";
+    if (!patterns.phone.test(form.manager_phone)) e.manager_phone = "Teléfono inválido";
+    if (!patterns.email.test(form.manager_email)) e.manager_email = "Email inválido";
+    if (form.manager_password.length < 8) e.manager_password = "Mínimo 8 caracteres";
+    if (form.manager_password !== form.manager_password_confirm)
+      e.manager_password_confirm = "Las contraseñas no coinciden";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    setLoading(true);
-    setError("");
-
+    setServerMsg("");
+    if (!validate()) return;
+    setSubmitting(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/register`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "No se pudo crear la cuenta");
-        setLoading(false);
+      const { manager_password_confirm, ...payload } = form;
+      const res = await createWorkshop(payload);
+      if (!res.ok) {
+        setServerMsg(res.data?.message || "Error al registrar el taller");
         return;
       }
-
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-
-      navigate("/dashboard");
-    } catch (err) {
-      setError("Error de conexión. Inténtalo de nuevo.");
-      console.error(err);
+      navigate("/login", { state: { justRegistered: true } });
+    } catch {
+      setServerMsg("Error de red. Inténtalo de nuevo.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
+  const field = (name, label, type = "text", extra = {}) => (
+    <div className="mb-3">
+      <label className="form-label">{label}</label>
+      <input
+        type={type}
+        name={name}
+        value={form[name]}
+        onChange={handleChange}
+        className={`form-control ${errors[name] ? "is-invalid" : ""}`}
+        {...extra}
+      />
+      {errors[name] && <div className="invalid-feedback">{errors[name]}</div>}
+    </div>
+  );
+
   return (
-    <div className="container d-flex justify-content-center align-items-center min-vh-100 bg-light">
-      <div className={`card p-4 shadow-sm border-0 bg-white ${styles.loginCard}`}>
-
-        <div className="mb-4">
-          <button
-            type="button"
-            className={`btn p-0 text-danger ${styles.backArrow}`}
-            onClick={() => navigate("/")}
-          >
-            <i className="fa-solid fa-arrow-left"></i>
-          </button>
+    <div className="container py-4" style={{ maxWidth: 720 }}>
+      <h2 className="mb-4">Registro de Taller</h2>
+      {serverMsg && <div className="alert alert-danger">{serverMsg}</div>}
+      <form onSubmit={handleSubmit} noValidate>
+        <h5 className="mt-3">Datos del taller</h5>
+        {field("company_name", "Razón social")}
+        {field("cif", "CIF", "text", { maxLength: 9, placeholder: "B12345678" })}
+        {field("phone", "Teléfono", "tel", { placeholder: "+34600000000" })}
+        {field("email", "Email del taller", "email")}
+        {field("address", "Dirección")}
+        <div className="row">
+          <div className="col-md-4">{field("postal_code", "Código postal", "text", { maxLength: 5, placeholder: "28001" })}</div>
+          <div className="col-md-4">{field("city", "Ciudad")}</div>
+          <div className="col-md-4">{field("province", "Provincia")}</div>
         </div>
+        {field("country", "País")}
+        {field("website", "Web (opcional)", "url", { placeholder: "https://" })}
 
-        <h2 className={`fw-bold m-0 text-dark ${styles.titleHello}`}>
-          Registra tu taller
-        </h2>
-
-        <h3 className={`mb-4 mt-2 text-dark`}>
-          Crear cuenta admin
-        </h3>
-
-        {error && (
-          <div className="alert alert-danger alert-dismissible fade show" role="alert">
-            {error}
-            <button
-              type="button"
-              className="btn-close"
-              onClick={() => setError("")}
-            ></button>
-          </div>
-        )}
-
-        <form onSubmit={handleRegister}>
-          <div className="mb-3">
-            <input
-              type="text"
-              name="company_name"
-              className={`form-control py-3 px-4 border ${styles.loginInput}`}
-              placeholder="Nombre del taller"
-              value={formData.company_name}
-              onChange={handleInputChange}
-              required
-            />
-          </div>
-
-          <div className="mb-3">
-            <input
-              type="text"
-              name="cif"
-              className={`form-control py-3 px-4 border ${styles.loginInput}`}
-              placeholder="CIF / NIF"
-              value={formData.cif}
-              onChange={handleInputChange}
-              required
-            />
-          </div>
-
-          <div className="mb-3">
-            <input
-              type="tel"
-              name="phone"
-              className={`form-control py-3 px-4 border ${styles.loginInput}`}
-              placeholder="Teléfono del taller"
-              value={formData.phone}
-              onChange={handleInputChange}
-              required
-            />
-          </div>
-
-          <div className="mb-3">
-            <input
-              type="email"
-              name="email"
-              className={`form-control py-3 px-4 border ${styles.loginInput}`}
-              placeholder="Email del administrador"
-              value={formData.email}
-              onChange={handleInputChange}
-              required
-            />
-          </div>
-
-          <div className="mb-2 position-relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              name="password"
-              className={`form-control py-3 px-4 border ${styles.loginInput}`}
-              placeholder="Contraseña"
-              value={formData.password}
-              onChange={handleInputChange}
-              required
-            />
-
-            <button
-              type="button"
-              className={`btn p-0 position-absolute top-50 end-0 translate-middle-y me-3 text-secondary ${styles.passwordEye}`}
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              <i className={`fa-solid ${showPassword ? "fa-eye" : "fa-eye-slash"}`}></i>
-            </button>
-          </div>
-
-          <div className="mb-4 position-relative">
-            <input
-              type={showPasswordConfirm ? "text" : "password"}
-              name="password_confirm"
-              className={`form-control py-3 px-4 border ${styles.loginInput}`}
-              placeholder="Confirmar contraseña"
-              value={formData.password_confirm}
-              onChange={handleInputChange}
-              required
-            />
-
-            <button
-              type="button"
-              className={`btn p-0 position-absolute top-50 end-0 translate-middle-y me-3 text-secondary ${styles.passwordEye}`}
-              onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
-            >
-              <i className={`fa-solid ${showPasswordConfirm ? "fa-eye" : "fa-eye-slash"}`}></i>
-            </button>
-          </div>
-
-          <button
-            type="submit"
-            className={`btn w-100 py-3 fw-bold ${styles.btnLogin}`}
-            disabled={loading}
-          >
-            {loading ? "Creando taller..." : "Crear taller"}
-          </button>
-        </form>
-
-        <div className="text-center mt-2">
-          <span className="text-secondary small">¿Ya tienes cuenta? </span>
-          <button
-            type="button"
-            className="btn btn-link p-0 text-dark fw-bold text-decoration-none small"
-            onClick={() => navigate("/")}
-          >
-            Iniciar sesión
-          </button>
+        <h5 className="mt-4">Datos del gerente</h5>
+        <div className="row">
+          <div className="col-md-6">{field("manager_first_name", "Nombre")}</div>
+          <div className="col-md-6">{field("manager_last_name", "Apellidos")}</div>
         </div>
+        {field("manager_dni", "DNI", "text", { maxLength: 9, placeholder: "12345678A" })}
+        {field("manager_phone", "Teléfono", "tel")}
+        {field("manager_email", "Email", "email")}
+        {field("manager_password", "Contraseña", "password")}
+        {field("manager_password_confirm", "Repite la contraseña", "password")}
 
-      </div>
+        <button type="submit" className="btn btn-primary w-100 mt-3" disabled={submitting}>
+          {submitting ? "Creando..." : "Crear taller"}
+        </button>
+      </form>
     </div>
   );
 };

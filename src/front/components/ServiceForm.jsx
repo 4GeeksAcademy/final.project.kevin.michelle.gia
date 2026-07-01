@@ -62,12 +62,10 @@ const SERVICE_TYPES = [
 const SERVICE_STATUSES = [
   { value: "pending", label: "Pending" },
   { value: "diagnosis", label: "Diagnosis" },
-  { value: "budget_pending", label: "Budget pending" },
   { value: "waiting_parts", label: "Waiting parts" },
   { value: "in_repair", label: "In repair" },
   { value: "ready_to_deliver", label: "Ready to deliver" },
-  { value: "delivered", label: "Delivered" },
-  { value: "cancelled", label: "Cancelled" }
+  { value: "delivered", label: "Delivered" }
 ];
 
 const SERVICE_PRIORITIES = [

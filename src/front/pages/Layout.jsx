@@ -1,23 +1,18 @@
 import React from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
 
 export const Layout = () => {
-  const location = useLocation();
-
-  const isDashboardRoute =
-    location.pathname.startsWith("/admin") ||
-    location.pathname.startsWith("/mechanic") ||
-    location.pathname.startsWith("/dashboard");
-
   return (
-    <>
-      {!isDashboardRoute && <Navbar />}
+    <div className="min-vh-100 d-flex flex-column">
+      <Navbar />
 
-      <Outlet />
+      <main className="flex-grow-1 d-flex overflow-hidden">
+        <Outlet />
+      </main>
 
-      {!isDashboardRoute && <Footer />}
-    </>
+      <Footer />
+    </div>
   );
 };

@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Eye, Flag, Pencil } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Flag,
+  CalendarDays,
+  Pencil,
+  UserRound,
+  Wrench,
+} from "lucide-react";
 import "./ServiceStatusBoard.css";
 
-const RAW_BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:3001";
+const RAW_BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:3001";
 
 const API_BASE_URL = RAW_BACKEND_URL.endsWith("/api")
   ? RAW_BACKEND_URL
@@ -11,23 +20,33 @@ const API_BASE_URL = RAW_BACKEND_URL.endsWith("/api")
 
 const BOARD_COLUMNS = [
   {
-    id: "to_repair",
-    title: "Vehicles to repair",
-    statuses: ["pending", "diagnosis", "budget_pending", "waiting_parts"],
+    id: "pending",
+    title: "Pending",
+    statuses: ["pending"],
   },
   {
-    id: "in_progress",
-    title: "In progress",
+    id: "diagnosis",
+    title: "Diagnosis",
+    statuses: ["diagnosis", "budget_pending"],
+  },
+  {
+    id: "waiting_parts",
+    title: "Waiting parts",
+    statuses: ["waiting_parts"],
+  },
+  {
+    id: "in_repair",
+    title: "In repair",
     statuses: ["in_repair"],
   },
   {
-    id: "ready_for_pickup",
-    title: "Ready for pickup",
+    id: "ready_to_deliver",
+    title: "Ready to deliver",
     statuses: ["ready_to_deliver"],
   },
   {
-    id: "finished",
-    title: "Finished",
+    id: "delivered",
+    title: "Delivered",
     statuses: ["delivered"],
   },
 ];
@@ -40,18 +59,16 @@ const STATUS_LABELS = {
   in_repair: "In repair",
   ready_to_deliver: "Ready to deliver",
   delivered: "Delivered",
-  cancelled: "Cancelled",
 };
 
-const STATUS_ORDER = [
-  "pending",
-  "diagnosis",
-  "budget_pending",
-  "waiting_parts",
-  "in_repair",
-  "ready_to_deliver",
-  "delivered",
-];
+const PRIORITY_LABELS = {
+  low: "Low",
+  normal: "Normal",
+  high: "High",
+  urgent: "Urgent",
+};
+
+const STATUS_FLOW_COLUMNS = BOARD_COLUMNS;
 
 function buildUrl(path) {
   return `${API_BASE_URL}${path}`;
@@ -87,34 +104,62 @@ function normalizeAdminServices(servicesByStatus) {
   );
 }
 
-function getPreviousStatus(status) {
-  const currentIndex = STATUS_ORDER.indexOf(status);
+function getColumnIndexByStatus(status) {
+  return STATUS_FLOW_COLUMNS.findIndex((column) =>
+    column.statuses.includes(status)
+  );
+}
 
-  if (currentIndex <= 0) {
+function getMainStatusFromColumn(column) {
+  return column?.statuses?.[0] || null;
+}
+
+function getPreviousStatus(status) {
+  const currentColumnIndex = getColumnIndexByStatus(status);
+
+  if (currentColumnIndex <= 0) {
     return null;
   }
 
-  return STATUS_ORDER[currentIndex - 1];
+  const previousColumn = STATUS_FLOW_COLUMNS[currentColumnIndex - 1];
+
+  return getMainStatusFromColumn(previousColumn);
 }
 
 function getNextStatus(status) {
-  const currentIndex = STATUS_ORDER.indexOf(status);
+  const currentColumnIndex = getColumnIndexByStatus(status);
 
-  if (currentIndex === -1 || currentIndex >= STATUS_ORDER.length - 1) {
+  if (
+    currentColumnIndex === -1 ||
+    currentColumnIndex >= STATUS_FLOW_COLUMNS.length - 1
+  ) {
     return null;
   }
 
-  return STATUS_ORDER[currentIndex + 1];
+  const nextColumn = STATUS_FLOW_COLUMNS[currentColumnIndex + 1];
+
+  return getMainStatusFromColumn(nextColumn);
 }
 
-function getVehicleTitle(service) {
+function getColumnTitleByStatus(status) {
+  const column = BOARD_COLUMNS.find((column) =>
+    column.statuses.includes(status)
+  );
+
+  return column?.title || STATUS_LABELS[status] || status;
+}
+
+function getVehicleInfo(service) {
   const brand = service.vehicle_brand || "";
   const model = service.vehicle_model || "";
-  const plate = service.vehicle_plate ? ` · ${service.vehicle_plate}` : "";
+  const plate = service.vehicle_plate || "No plate";
 
   const vehicleName = `${brand} ${model}`.trim();
 
-  return `${vehicleName || "Unknown vehicle"}${plate}`;
+  return {
+    name: vehicleName || "Unknown vehicle",
+    plate,
+  };
 }
 
 export function ServiceStatusBoard({ role = "admin" }) {
@@ -142,7 +187,9 @@ export function ServiceStatusBoard({ role = "admin" }) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || data.message || "Could not load services");
+        throw new Error(
+          data.error || data.message || "Could not load services"
+        );
       }
 
       if (isMechanic) {
@@ -188,7 +235,9 @@ export function ServiceStatusBoard({ role = "admin" }) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || data.message || "Could not update status");
+        throw new Error(
+          data.error || data.message || "Could not update status"
+        );
       }
 
       await fetchServices();
@@ -208,13 +257,16 @@ export function ServiceStatusBoard({ role = "admin" }) {
       setActionLoadingId(serviceId);
       setError("");
 
-      const response = await fetch(buildUrl(`/services/${serviceId}/notify-admin`), {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          message: message.trim(),
-        }),
-      });
+      const response = await fetch(
+        buildUrl(`/services/${serviceId}/notify-admin`),
+        {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            message: message.trim(),
+          }),
+        }
+      );
 
       const data = await response.json();
 
@@ -265,44 +317,71 @@ export function ServiceStatusBoard({ role = "admin" }) {
                     const previousStatus = getPreviousStatus(service.status);
                     const nextStatus = getNextStatus(service.status);
                     const isUpdating = actionLoadingId === service.id;
+                    const vehicleInfo = getVehicleInfo(service);
+                    const priority = service.priority || "normal";
 
                     return (
                       <article className="service-card" key={service.id}>
                         <div className="service-card-top">
-                          <span className={`status-pill status-${service.status}`}>
-                            {STATUS_LABELS[service.status] || service.status}
+                          <span
+                            className={`status-pill status-${service.status}`}
+                            title={
+                              STATUS_LABELS[service.status] || service.status
+                            }
+                          >
+                            <span className="pill-dot"></span>
+                            <span className="pill-text">
+                              {STATUS_LABELS[service.status] || service.status}
+                            </span>
                           </span>
 
                           <span
-                            className={`priority-pill priority-${
-                              service.priority || "normal"
-                            }`}
+                            className={`priority-pill priority-${priority}`}
+                            title={PRIORITY_LABELS[priority] || priority}
                           >
-                            {service.priority || "normal"}
+                            <span className="pill-dot"></span>
+                            <span className="pill-text">
+                              {PRIORITY_LABELS[priority] || priority}
+                            </span>
                           </span>
                         </div>
 
-                        <h4 className="service-vehicle-title">
-                          {getVehicleTitle(service)}
-                        </h4>
+                        <div className="service-vehicle-block">
+                          <h4 className="service-vehicle-title">
+                            {vehicleInfo.name}
+                          </h4>
+
+                          <span className="service-plate-badge">
+                            {vehicleInfo.plate}
+                          </span>
+                        </div>
 
                         <p className="service-title">
                           {service.title || "No service title"}
                         </p>
 
-                        <div className="service-meta">
-                          <span>Customer</span>
-                          <strong>{service.customer_name || "Unknown customer"}</strong>
-                        </div>
+                        <div className="service-meta-list">
+                          <div className="service-meta-row">
+                            <UserRound size={14} />
+                            <span>Customer</span>
+                            <strong>
+                              {service.customer_name || "Unknown customer"}
+                            </strong>
+                          </div>
 
-                        <div className="service-meta">
-                          <span>Mechanic</span>
-                          <strong>{service.employee_name || "Unassigned"}</strong>
-                        </div>
+                          <div className="service-meta-row">
+                            <Wrench size={14} />
+                            <span>Mechanic</span>
+                            <strong>
+                              {service.employee_name || "Unassigned"}
+                            </strong>
+                          </div>
 
-                        <div className="service-meta">
-                          <span>Entry date</span>
-                          <strong>{formatDate(service.start_date)}</strong>
+                          <div className="service-meta-row">
+                            <CalendarDays size={14} />
+                            <span>Entry date</span>
+                            <strong>{formatDate(service.start_date)}</strong>
+                          </div>
                         </div>
 
                         {service.observations && (
@@ -314,54 +393,71 @@ export function ServiceStatusBoard({ role = "admin" }) {
                         <div className="service-card-actions">
                           <button
                             type="button"
-                            className="card-action details-action icon-only-action"
-                            title="Details"
+                            className="details-link-button"
                             disabled={isUpdating}
                             onClick={() => goToServiceDetails(service.id)}
                           >
-                            <Eye size={16} />
+                            View details
                           </button>
 
-                          {isMechanic ? (
-                            <button
-                              type="button"
-                              className="card-action report-action icon-only-action"
-                              title="Report issue"
-                              disabled={isUpdating}
-                              onClick={() => reportIssue(service.id)}
-                            >
-                              <Flag size={16} />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="card-action edit-action icon-only-action"
-                              title="Edit service"
-                              disabled={isUpdating}
-                              onClick={() => goToServiceDetails(service.id)}
-                            >
-                              <Pencil size={16} />
-                            </button>
-                          )}
+                          <div className="service-icon-actions">
+                            {isMechanic ? (
+                              <button
+                                type="button"
+                                className="card-icon-action report-action"
+                                title="Report issue to admin"
+                                disabled={isUpdating}
+                                onClick={() => reportIssue(service.id)}
+                              >
+                                <Flag size={15} />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="card-icon-action edit-action"
+                                title="Edit service"
+                                disabled={isUpdating}
+                                onClick={() => goToServiceDetails(service.id)}
+                              >
+                                <Pencil size={15} />
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         <div className="service-status-actions">
                           <button
                             type="button"
-                            className="status-action previous-action icon-only-action"
-                            title="Previous status"
+                            className="status-icon-action previous-action"
+                            title={
+                              previousStatus
+                                ? `Back to ${getColumnTitleByStatus(
+                                    previousStatus
+                                  )}`
+                                : "No previous status"
+                            }
                             disabled={!previousStatus || isUpdating}
-                            onClick={() => updateServiceStatus(service.id, previousStatus)}
+                            onClick={() =>
+                              updateServiceStatus(service.id, previousStatus)
+                            }
                           >
                             <ArrowLeft size={16} />
                           </button>
 
                           <button
                             type="button"
-                            className="status-action next-action icon-only-action"
-                            title="Next status"
+                            className="status-icon-action next-action"
+                            title={
+                              nextStatus
+                                ? `Move to ${getColumnTitleByStatus(
+                                    nextStatus
+                                  )}`
+                                : "Final status"
+                            }
                             disabled={!nextStatus || isUpdating}
-                            onClick={() => updateServiceStatus(service.id, nextStatus)}
+                            onClick={() =>
+                              updateServiceStatus(service.id, nextStatus)
+                            }
                           >
                             <ArrowRight size={16} />
                           </button>

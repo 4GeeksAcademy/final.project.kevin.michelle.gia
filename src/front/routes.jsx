@@ -1,10 +1,4 @@
-// Import necessary components and functions from react-router-dom.
-
-import {
-    createBrowserRouter,
-    createRoutesFromElements,
-    Route,
-} from "react-router-dom";
+import { createBrowserRouter, createRoutesFromElements, Route,} from "react-router-dom";
 
 import { Layout } from "./pages/Layout";
 import { Home } from "./pages/Home";
@@ -18,19 +12,18 @@ import Customer from "./pages/CustomerList";
 import { ServiceList } from "./pages/ServiceList";
  
 
+import { DashboardLayout } from "./pages/DashboardLayout";
+import { AdminDashboard } from "./pages/AdminDashboard";
+import { MechanicDashboard } from "./pages/MechanicDashboard";
+
+import Customer from "./pages/CustomerList";
+import { ServiceFormPage } from "./pages/ServiceFormPage";
+import MechanicList from "./pages/MechanicList";
+import VehicleList from "./pages/VehicleList";
+
 const Routes = createRoutesFromElements(
-    // CreateRoutesFromElements function allows you to build route elements declaratively.
-    // Create your routes here, if you want to keep the Navbar and Footer in all views, add your new routes inside the containing Route.
-    // Root, on the contrary, create a sister Route, if you have doubts, try it!
-    // Note: keep in mind that errorElement will be the default page when you don't get a route, customize that page to make your project more attractive.
-    // Note: The child paths of the Layout element replace the Outlet component with the elements contained in the "element" attribute of these child paths.
-
-        // Root Route: All navigation will start from here.
-        <Route path="/" element={<Layout />} errorElement={<h1>Not found!</h1>}>
-
-        {/* Nested Routes: Defines sub-routes within the BaseHome component. */}
+    <Route path="/" element={<Layout />} errorElement={<h1>Not found! :c</h1>}>
         <Route index element={<Home />} />
-        <Route path= "/" element={<Home />} />
         <Route path="login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/dashboard" element={<Dashboard />} />
@@ -43,5 +36,56 @@ const Routes = createRoutesFromElements(
     
 );
 
-export const router = createBrowserRouter(Routes);
+        <Route
+            path="admin/customers"
+            element={
+                <DashboardLayout allowedRole="admin">
+                    <Customer />
+                </DashboardLayout>
+            }
+        />
 
+        <Route
+            path="admin/mechanics"
+            element={
+                <DashboardLayout allowedRole="admin">
+                    <MechanicList />
+                </DashboardLayout>
+            }
+        />
+
+        <Route
+            path="admin/vehicles"
+            element={
+                <DashboardLayout allowedRole="admin">
+                    <VehicleList />
+                </DashboardLayout>
+            }
+        />
+
+        <Route
+            path="admin/services/new"
+            element={
+                <DashboardLayout allowedRole="admin">
+                    <ServiceFormPage />
+                </DashboardLayout>
+            }
+        />
+
+        {/* Mechanic routes con sidebar */}
+        <Route
+            path="mechanic"
+            element={
+                <DashboardLayout allowedRole="mechanic">
+                    <MechanicDashboard />
+                </DashboardLayout>
+            }
+        />
+
+        {/* Rutas viejas / pruebas */}
+        <Route path="single/:theId" element={<Single />} />
+        <Route path="demo" element={<Demo />} />
+    </Route>
+);
+
+export const router = createBrowserRouter(Routes);

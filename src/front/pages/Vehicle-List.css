@@ -1,0 +1,48 @@
+:root {
+    --primary-orange: #e65100;
+    --hover-orange: #bf4300;
+    --light-bg: #f8f9fa;
+    --border-color: #dee2e6;
+}
+
+/* Botones */
+.btn-orange {
+    background-color: var(--primary-orange);
+    color: white;
+    border: none;
+}
+.btn-orange:hover { background-color: var(--hover-orange); color: white; }
+
+.btn-orange-action {
+    background-color: white;
+    border: 1px solid var(--border-color);
+    color: #6c757d;
+}
+.btn-orange-action:hover { border-color: var(--primary-orange); color: var(--primary-orange); }
+
+/* Tabla y Card */
+.table-card-wrapper {
+    background: white;
+    border-radius: 8px;
+}
+
+.vehicle-workshop-table th {
+    background-color: var(--light-bg);
+    color: #495057;
+    font-weight: 600;
+}
+
+/* Acciones */
+.action-icon-btn {
+    border: none;
+    background: transparent;
+    padding: 5px;
+}
+.action-edit { color: var(--primary-orange); }
+.action-delete { color: #dc3545; }
+
+/* Menú dropdown (mismo estilo que mechanic list) */
+.backend-dropdown {
+    min-width: 200px;
+    z-index: 1000;
+}

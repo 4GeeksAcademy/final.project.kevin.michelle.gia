@@ -1,7 +1,5 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
-import { AdminDashboard } from "./AdminDashboard";
-import { MechanicDashboard } from "./MechanicDashboard";
 
 const getStoredObject = (key) => {
   const storedValue = localStorage.getItem(key);
@@ -13,7 +11,7 @@ const getStoredObject = (key) => {
   try {
     return JSON.parse(storedValue);
   } catch (error) {
-    console.error(`Error leyendo ${key} desde localStorage`, error);
+    console.error(`Error reading ${key} from localStorage`, error);
     localStorage.removeItem(key);
     return null;
   }
@@ -22,20 +20,21 @@ const getStoredObject = (key) => {
 export const Dashboard = () => {
   const token = localStorage.getItem("token");
   const user = getStoredObject("user");
+  const employee = getStoredObject("employee");
 
   if (!token || !user) {
     return <Navigate to="/login" replace />;
   }
 
-  const role = user.role ? user.role.toLowerCase() : "";
+  const role = (employee?.role || user?.role || "").toLowerCase();
 
   if (role === "admin") {
-    return <AdminDashboard user={user} />;
+    return <Navigate to="/admin" replace />;
   }
 
   if (role === "mechanic") {
-    return <MechanicDashboard user={user} />;
+    return <Navigate to="/mechanic" replace />;
   }
 
-  return <Navigate to="/" replace />;
+  return <Navigate to="/login" replace />;
 };

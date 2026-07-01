@@ -15,6 +15,7 @@ import { Single } from "./pages/Single";
 import { Demo } from "./pages/Demo";
 import { VehicleForm } from "./pages/VehicleForm";
 import Customer from "./pages/CustomerList";
+import { ServiceList } from "./pages/ServiceList";
  
 
 const Routes = createRoutesFromElements(
@@ -37,6 +38,7 @@ const Routes = createRoutesFromElements(
         <Route path="/demo" element={<Demo />} />
         <Route path="/vehiculos/nuevo" element={<VehicleForm />} />
         <Route path="/customers" element={<Customer />} />
+        <Route path="/services" element={<ServiceList />} />
       </Route>
     
 );

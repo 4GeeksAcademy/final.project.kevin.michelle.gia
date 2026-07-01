@@ -19,8 +19,6 @@
   color: #475569;
   font-weight: 600;
 }
-
-/* Board columns wrapper */
 .status-board-columns {
   height: 100%;
   min-height: 0;
@@ -38,7 +36,6 @@
   padding: 0 0 12px;
 }
 
-/* Horizontal scrollbar */
 .status-board-columns::-webkit-scrollbar {
   height: 10px;
 }
@@ -52,8 +49,6 @@
   background: #94a3b8;
   border-radius: 999px;
 }
-
-/* Status column */
 .status-column {
   flex: 0 0 280px;
   min-width: 280px;
@@ -97,8 +92,6 @@
   font-size: 0.8rem;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
 }
-
-/* The cards scroll inside each column */
 .status-column-list {
   flex: 1;
   min-height: 0;
@@ -113,7 +106,6 @@
   padding-right: 4px;
 }
 
-/* Vertical scrollbar inside each column */
 .status-column-list::-webkit-scrollbar {
   width: 7px;
 }
@@ -138,7 +130,7 @@
   font-weight: 600;
 }
 
-/* Service card */
+
 .service-card {
   flex-shrink: 0;
   background: #ffffff;
@@ -183,7 +175,6 @@
   display: inline-block;
 }
 
-/* Status colors */
 .status-pending {
   background: rgba(255, 193, 7, 0.12);
   color: #8a5b00;
@@ -248,7 +239,6 @@
   background: #ef4444;
 }
 
-/* Priority colors */
 .priority-low {
   background: rgba(148, 163, 184, 0.12);
   color: #64748b;
@@ -523,7 +513,6 @@
   transform: none;
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .status-board-columns {
     padding-bottom: 10px;

@@ -58,8 +58,6 @@ body {
   overflow: hidden;
 }
 
-/* This allows the upper part of the sidebar to scroll
-   only if it gets too tall, while the footer stays visible */
 .dashboard-sidebar > div:first-child {
   min-height: 0;
   overflow-y: auto;
@@ -79,9 +77,9 @@ body {
   border-radius: 999px;
 }
 
-/* =========================
+/* 
    SIDEBAR PROFILE
-========================= */
+=================== */
 
 .dashboard-profile {
   margin-bottom: 30px;
@@ -134,7 +132,7 @@ body {
   margin: 8px 0 0;
 }
 
-/* =========================
+/* ==============
    SIDEBAR BUTTONS
 ========================= */
 
@@ -222,9 +220,9 @@ body {
   cursor: not-allowed;
 }
 
-/* =========================
+/* ======================
    SIDEBAR WORKSHOP INFO
-========================= */
+====================== */
 
 .dashboard-sidebar-bottom {
   margin-top: auto;
@@ -322,9 +320,9 @@ body {
   overflow: hidden;
 }
 
-/* =========================
+/* =================
    SERVICE TICKET PAGE
-========================= */
+================= */
 
 .service-ticket-page {
   width: 100%;
@@ -427,9 +425,9 @@ body {
   font-weight: 700;
 }
 
-/* =========================
+/* =================
    RESPONSIVE
-========================= */
+==================== */
 
 @media (max-width: 1100px) {
   .dashboard-sidebar {

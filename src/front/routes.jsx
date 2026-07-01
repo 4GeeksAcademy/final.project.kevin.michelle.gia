@@ -7,6 +7,7 @@ import { Register } from "./pages/Register";
 import { Dashboard } from "./pages/Dashboard";
 import { Single } from "./pages/Single";
 import { Demo } from "./pages/Demo";
+import { ForgotPassword } from "./pages/ForgotPassword";
 
 import { DashboardLayout } from "./pages/DashboardLayout";
 import { AdminDashboard } from "./pages/AdminDashboard";
@@ -22,7 +23,7 @@ const Routes = createRoutesFromElements(
         <Route index element={<Home />} />
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
-        {/* Esta ruta solo revisa el role y redirige a /admin o /mechanic */}
+        <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="dashboard" element={<Dashboard />} />
 
         {/* Admin routes con sidebar */}

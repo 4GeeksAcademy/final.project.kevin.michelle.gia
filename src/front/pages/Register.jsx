@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { registerWorkshop } from "../services/api";
 import { createWorkshop } from "../services/api";
 
 const initialState = {

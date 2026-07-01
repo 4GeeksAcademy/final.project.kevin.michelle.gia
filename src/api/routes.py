@@ -172,21 +172,11 @@ def login_user():
 
     user = User.query.filter_by(email=email).first()
     if not user:
-        return error_response("Invalid email or password", 401)
-
-    employee = user.employee
-    workshop = Workshop.query.filter_by(id=employee.workshop_id).first()
-
-    if not employee:
-        return error_response("This user account has no employee profile", 403)
-
-    if not employee.is_active:
-        return error_response("This employee account is inactive", 403)
-
-    is_valid_password = bcrypt.check_password_hash(user.password_hash, password)
-
-    if not is_valid_password:
-        return error_response("Invalid email or password", 401)
+        return jsonify({"message": "Invalid email or password"}), 401
+    if not user.is_active:
+        return jsonify({"message": "This user account is inactive"}), 403
+    if not bcrypt.check_password_hash(user.password_hash, password):
+        return jsonify({"message": "Invalid email or password"}), 401
 
     access_token = create_access_token(
         identity=str(user.id),
@@ -196,29 +186,7 @@ def login_user():
         "message": "Login successful",
         "token": access_token,
         "user": user.serialize(),
-        "employee": employee.serialize(),
-        "workshop": workshop.serialize()
-    }), 200
-
-
-@api.route("/me", methods=["GET"])
-@jwt_required()
-def get_me():
-
-    current_user = get_current_user()
-
-    if not current_user:
-        return error_response("User not found", 404)
-
-    employee = current_user.employee
-
-    if not employee:
-        return error_response("Employee profile not found", 404)
-
-    return jsonify({
-        "user": current_user.serialize(),
-        "employee": employee.serialize(),
-        "workshop": employee.workshop.serialize() if employee.workshop else None
+        "employee": user.employee.serialize() if user.employee else None
     }), 200
 
 

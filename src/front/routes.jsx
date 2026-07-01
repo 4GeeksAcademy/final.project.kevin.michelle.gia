@@ -7,6 +7,10 @@ import { Register } from "./pages/Register";
 import { Dashboard } from "./pages/Dashboard";
 import { Single } from "./pages/Single";
 import { Demo } from "./pages/Demo";
+import { VehicleForm } from "./pages/VehicleForm";
+import Customer from "./pages/CustomerList";
+import { ServiceList } from "./pages/ServiceList";
+ 
 
 import { DashboardLayout } from "./pages/DashboardLayout";
 import { AdminDashboard } from "./pages/AdminDashboard";
@@ -21,19 +25,16 @@ const Routes = createRoutesFromElements(
     <Route path="/" element={<Layout />} errorElement={<h1>Not found! :c</h1>}>
         <Route index element={<Home />} />
         <Route path="login" element={<Login />} />
-        <Route path="register" element={<Register />} />
-        {/* Esta ruta solo revisa el role y redirige a /admin o /mechanic */}
-        <Route path="dashboard" element={<Dashboard />} />
-
-        {/* Admin routes con sidebar */}
-        <Route
-            path="admin"
-            element={
-                <DashboardLayout allowedRole="admin">
-                    <AdminDashboard />
-                </DashboardLayout>
-            }
-        />
+        <Route path="/register" element={<Register />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/single/:theId" element={ <Single />} />  {/* Dynamic route for single items */}
+        <Route path="/demo" element={<Demo />} />
+        <Route path="/vehiculos/nuevo" element={<VehicleForm />} />
+        <Route path="/customers" element={<Customer />} />
+        <Route path="/services" element={<ServiceList />} />
+      </Route>
+    
+);
 
         <Route
             path="admin/customers"

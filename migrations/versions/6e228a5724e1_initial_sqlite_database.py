@@ -1,8 +1,8 @@
-"""initial workshop schema
+"""initial sqlite database
 
-Revision ID: e67db382851a
+Revision ID: 6e228a5724e1
 Revises: 
-Create Date: 2026-06-25 17:53:01.732922
+Create Date: 2026-07-03 13:08:30.636198
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'e67db382851a'
+revision = '6e228a5724e1'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -104,6 +104,17 @@ def upgrade():
     sa.UniqueConstraint('plate'),
     sa.UniqueConstraint('vin')
     )
+    op.create_table('password_reset_tokens',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('token_hash', sa.String(length=255), nullable=False),
+    sa.Column('expires_at', sa.DateTime(), nullable=False),
+    sa.Column('used_at', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('token_hash')
+    )
     op.create_table('services',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('title', sa.String(length=120), nullable=False),
@@ -157,6 +168,7 @@ def downgrade():
     op.drop_table('service_status_logs')
     op.drop_table('service_comments')
     op.drop_table('services')
+    op.drop_table('password_reset_tokens')
     op.drop_table('vehicles')
     op.drop_table('users')
     op.drop_table('employees')

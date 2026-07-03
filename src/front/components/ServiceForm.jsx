@@ -509,6 +509,7 @@ export function ServiceForm({ onServiceCreated }) {
     try {
       const payload = {
         vehicle_id: Number(formData.vehicle_id),
+        customer_id: selectedCustomer.id,
         employee_id: formData.employee_id ? Number(formData.employee_id) : null,
         title: formData.title.trim(),
         description: formData.description.trim() || null,

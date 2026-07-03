@@ -1,4 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import hashlib
+import secrets
 from flask import Blueprint, request, jsonify
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
@@ -13,7 +15,8 @@ from api.models import (
     Vehicle,
     Service,
     ServiceComment,
-    ServiceStatusLog
+    ServiceStatusLog,
+    PasswordResetToken
 )
 
 
@@ -166,14 +169,22 @@ def create_status_log(service, employee_id, new_status, note=None):
     return status_log
 
 
-def get_customer_or_error(customer_id, current_user):
+def get_customer_or_error(customer_id, current_user, active_only=True):
 
     workshop_id = get_current_workshop_id(current_user)
 
-    customer = Customer.query.filter_by(
+    if not workshop_id:
+        return None, error_response("Workshop not found for this user", 404)
+
+    query = Customer.query.filter_by(
         id=customer_id,
         workshop_id=workshop_id
-    ).first()
+    )
+
+    if active_only:
+        query = query.filter_by(is_active=True)
+
+    customer = query.first()
 
     if not customer:
         return None, error_response("Customer not found", 404)
@@ -181,14 +192,22 @@ def get_customer_or_error(customer_id, current_user):
     return customer, None
 
 
-def get_vehicle_or_error(vehicle_id, current_user):
+def get_vehicle_or_error(vehicle_id, current_user, active_only=True):
 
     workshop_id = get_current_workshop_id(current_user)
 
-    vehicle = Vehicle.query.filter_by(
+    if not workshop_id:
+        return None, error_response("Workshop not found for this user", 404)
+
+    query = Vehicle.query.filter_by(
         id=vehicle_id,
         workshop_id=workshop_id
-    ).first()
+    )
+
+    if active_only:
+        query = query.filter_by(is_active=True)
+
+    vehicle = query.first()
 
     if not vehicle:
         return None, error_response("Vehicle not found", 404)
@@ -196,14 +215,22 @@ def get_vehicle_or_error(vehicle_id, current_user):
     return vehicle, None
 
 
-def get_employee_or_error(employee_id, current_user):
+def get_employee_or_error(employee_id, current_user, active_only=True):
 
     workshop_id = get_current_workshop_id(current_user)
 
-    employee = Employee.query.filter_by(
+    if not workshop_id:
+        return None, error_response("Workshop not found for this user", 404)
+
+    query = Employee.query.filter_by(
         id=employee_id,
         workshop_id=workshop_id
-    ).first()
+    )
+
+    if active_only:
+        query = query.filter_by(is_active=True)
+
+    employee = query.first()
 
     if not employee:
         return None, error_response("Employee not found", 404)
@@ -214,6 +241,9 @@ def get_employee_or_error(employee_id, current_user):
 def get_service_or_error(service_id, current_user):
 
     workshop_id = get_current_workshop_id(current_user)
+
+    if not workshop_id:
+        return None, error_response("Workshop not found for this user", 404)
 
     service = Service.query.filter_by(
         id=service_id,
@@ -226,17 +256,8 @@ def get_service_or_error(service_id, current_user):
     return service, None
 
 
-###---------------HELLO----------------------
 
-@api.route("/hello", methods=["GET", "POST"])
-def handle_hello():
-
-    return jsonify({
-        "message": "Hello from the workshop API"
-    }), 200
-
-
-###---------------OPTIONS ENDPOINT----------------------
+###------------OPTIONS ENDPOINT----------------------
 
 @api.route("/options", methods=["GET"])
 def get_options():
@@ -250,7 +271,7 @@ def get_options():
     }), 200
 
 
-###---------------AUTH----------------------
+###---------------REGISTER----------------------
 
 @api.route("/register", methods=["POST"])
 def register():
@@ -359,6 +380,7 @@ def register():
         "employee": admin_employee.serialize()
     }), 201
 
+###--------------- LOGIN----------------------
 
 @api.route("/login", methods=["POST"])
 def login():
@@ -377,13 +399,20 @@ def login():
         return error_response("Invalid email or password", 401)
 
     employee = user.employee
-    workshop = Workshop.query.filter_by(id=employee.workshop_id).first()
 
     if not employee:
         return error_response("This user account has no employee profile", 403)
 
     if not employee.is_active:
         return error_response("This employee account is inactive", 403)
+
+    workshop = employee.workshop
+
+    if not workshop:
+        return error_response("Workshop not found", 404)
+
+    if not workshop.is_active:
+        return error_response("This workshop account is inactive", 403)
 
     is_valid_password = bcrypt.check_password_hash(user.password_hash, password)
 
@@ -407,6 +436,7 @@ def login():
         "workshop": workshop.serialize()
     }), 200
 
+###---------------C CURRENT USER / SESSION----------------------
 
 @api.route("/me", methods=["GET"])
 @jwt_required()
@@ -430,6 +460,7 @@ def get_me():
 
 
 ###---------------WORKSHOP----------------------
+
 
 @api.route("/workshop", methods=["GET"])
 @jwt_required()
@@ -477,8 +508,7 @@ def update_my_workshop():
         "email",
         "address",
         "city",
-        "postal_code",
-        "is_active"
+        "postal_code"
     ]
 
     for field in editable_fields:
@@ -492,7 +522,7 @@ def update_my_workshop():
         "workshop": workshop.serialize()
     }), 200
 
-###---------------MECHANICS / EMPLOYEES----------------------
+###---------------MECHANICS GET----------------------
 
 @api.route("/mechanics", methods=["GET"])
 @jwt_required()
@@ -515,6 +545,7 @@ def get_mechanics():
         "mechanics": [mechanic.serialize() for mechanic in mechanics]
     }), 200
 
+###------------MECHANICS CREATE----------------------
 
 @api.route("/mechanics", methods=["POST"])
 @jwt_required()
@@ -534,7 +565,6 @@ def create_mechanic():
     email = data.get("email")
     password = data.get("password")
     password_confirm = data.get("password_confirm")
-
     address = data.get("address")
     city = data.get("city")
     postal_code = data.get("postal_code")
@@ -567,7 +597,6 @@ def create_mechanic():
         city=city,
         postal_code=postal_code,
         role="mechanic",
-        job_position="mechanic",
         specialty=specialty,
         workshop_id=workshop_id
     )
@@ -591,7 +620,7 @@ def create_mechanic():
         "user": mechanic_user.serialize(),
         "employee": mechanic_employee.serialize()
     }), 201
-
+###---------------MECHANICS ID GETL----------------------
 
 @api.route("/mechanics/<int:employee_id>", methods=["GET"])
 @jwt_required()
@@ -607,10 +636,14 @@ def get_mechanic_detail(employee_id):
     if error:
         return error
 
+    if employee.role != "mechanic":
+        return error_response("Mechanic not found", 404)
+
     return jsonify({
         "mechanic": employee.serialize()
     }), 200
 
+###---------------MECHANICS  ID UPDATE----------------------
 
 @api.route("/mechanics/<int:employee_id>", methods=["PUT"])
 @jwt_required()
@@ -626,7 +659,19 @@ def update_mechanic(employee_id):
     if error:
         return error
 
+    if employee.role != "mechanic":
+        return error_response("Mechanic not found", 404)
+
     data = request.get_json() or {}
+
+    if "dni" in data and data.get("dni") != employee.dni:
+        existing_employee = Employee.query.filter(
+            Employee.dni == data.get("dni"),
+            Employee.id != employee.id
+        ).first()
+
+        if existing_employee:
+            return error_response("An employee with this DNI already exists", 409)
 
     editable_fields = [
         "first_name",
@@ -636,9 +681,7 @@ def update_mechanic(employee_id):
         "address",
         "city",
         "postal_code",
-        "job_position",
-        "specialty",
-        "is_active"
+        "specialty"
     ]
 
     for field in editable_fields:
@@ -652,6 +695,7 @@ def update_mechanic(employee_id):
         "mechanic": employee.serialize()
     }), 200
 
+###---------------MECHANICS ID DEACTIVATE----------------------
 
 @api.route("/mechanics/<int:employee_id>", methods=["DELETE"])
 @jwt_required()
@@ -667,6 +711,9 @@ def delete_mechanic(employee_id):
     if error:
         return error
 
+    if employee.role != "mechanic":
+        return error_response("Mechanic not found", 404)
+
     employee.is_active = False
     db.session.commit()
 
@@ -675,226 +722,55 @@ def delete_mechanic(employee_id):
     }), 200
 
 
-###---------------CUSTOMERS----------------------
-
-def serialize_customer_with_vehicles(customer):
-
-    customer_data = customer.serialize()
-
-    active_vehicles = [
-        vehicle for vehicle in customer.vehicles
-        if vehicle.is_active
-    ]
-
-    customer_data["vehicles_count"] = len(active_vehicles)
-
-    customer_data["vehicles"] = [
-        {
-            "id": vehicle.id,
-            "plate": vehicle.plate,
-            "brand": vehicle.brand,
-            "model": vehicle.model,
-            "version": vehicle.version,
-            "year": vehicle.year,
-            "fuel_type": vehicle.fuel_type,
-            "mileage": vehicle.mileage,
-            "customer_id": vehicle.customer_id,
-            "workshop_id": vehicle.workshop_id,
-            "is_active": vehicle.is_active
-        }
-        for vehicle in active_vehicles
-    ]
-
-    return customer_data
-
-@api.route("/customers", methods=["GET"])
-@jwt_required()
-def get_customers():
-
-    current_user = get_current_user()
-    workshop_id = get_current_workshop_id(current_user)
-
-    if not workshop_id:
-        return error_response("Workshop not found for this user", 404)
-
-    customers = (
-        Customer.query
-        .filter_by(
-            workshop_id=workshop_id,
-            is_active=True
-        )
-        .order_by(Customer.created_at.desc())
-        .all()
-    )
-
-    return jsonify({
-        "customers": [
-            serialize_customer_with_vehicles(customer)
-            for customer in customers
-        ]
-    }), 200
-
-
-@api.route("/customers", methods=["POST"])
-@jwt_required()
-def create_customer():
-
-    current_user = get_current_user()
-    data = request.get_json() or {}
-
-    first_name = data.get("first_name")
-    last_name = data.get("last_name")
-    dni = data.get("dni")
-    driving_license = data.get("driving_license")
-    phone = data.get("phone")
-    email = data.get("email")
-    address = data.get("address")
-
-    if not first_name or not last_name or not dni or not driving_license or not phone:
-        return error_response("first_name, last_name, dni, driving_license and phone are required", 400)
-
-    existing_customer_dni = Customer.query.filter_by(dni=dni).first()
-
-    if existing_customer_dni:
-        return error_response("A customer with this DNI already exists", 409)
-
-    existing_customer_license = Customer.query.filter_by(driving_license=driving_license).first()
-
-    if existing_customer_license:
-        return error_response("A customer with this driving license already exists", 409)
-
-    workshop_id = get_current_workshop_id(current_user)
-
-    customer = Customer(
-        first_name=first_name,
-        last_name=last_name,
-        dni=dni,
-        driving_license=driving_license,
-        phone=phone,
-        email=email,
-        address=address,
-        workshop_id=workshop_id
-    )
-
-    db.session.add(customer)
-    db.session.commit()
-
-    return jsonify({
-        "message": "Customer created successfully",
-        "customer": serialize_customer_with_vehicles(customer)
-    }), 201
-
-
-@api.route("/customers/<int:customer_id>", methods=["GET"])
-@jwt_required()
-def get_customer_detail(customer_id):
-
-    current_user = get_current_user()
-    customer, error = get_customer_or_error(customer_id, current_user)
-
-    if error:
-        return error
-
-    return jsonify({
-        "customer": serialize_customer_with_vehicles(customer)
-    }), 200
-
-
-@api.route("/customers/<int:customer_id>", methods=["PUT"])
-@jwt_required()
-def update_customer(customer_id):
-
-    current_user = get_current_user()
-    customer, error = get_customer_or_error(customer_id, current_user)
-
-    if error:
-        return error
-
-    data = request.get_json() or {}
-
-    if "dni" in data and data.get("dni") != customer.dni:
-        existing_customer_dni = Customer.query.filter(
-            Customer.dni == data.get("dni"),
-            Customer.id != customer.id
-        ).first()
-
-        if existing_customer_dni:
-            return error_response("A customer with this DNI already exists", 409)
-
-    if "driving_license" in data and data.get("driving_license") != customer.driving_license:
-        existing_customer_license = Customer.query.filter(
-            Customer.driving_license == data.get("driving_license"),
-            Customer.id != customer.id
-        ).first()
-
-        if existing_customer_license:
-            return error_response("A customer with this driving license already exists", 409)
-
-    editable_fields = [
-        "first_name",
-        "last_name",
-        "dni",
-        "driving_license",
-        "phone",
-        "email",
-        "address",
-        "is_active"
-    ]
-
-    for field in editable_fields:
-        if field in data:
-            setattr(customer, field, data[field])
-
-    db.session.commit()
-
-    return jsonify({
-        "message": "Customer updated successfully",
-        "customer": serialize_customer_with_vehicles(customer)
-    }), 200
-
-
-@api.route("/customers/<int:customer_id>", methods=["DELETE"])
-@jwt_required()
-def delete_customer(customer_id):
-
-    current_user = get_current_user()
-    customer, error = get_customer_or_error(customer_id, current_user)
-
-    if error:
-        return error
-
-    customer.is_active = False
-    db.session.commit()
-
-    return jsonify({
-        "message": "Customer deactivated successfully"
-    }), 200
-
-
-###---------------VEHICLES----------------------
+###---------------VEHICLES GET---------------------
 
 @api.route("/vehicles", methods=["GET"])
 @jwt_required()
 def get_vehicles():
 
     current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can see vehicles", 403)
+
     workshop_id = get_current_workshop_id(current_user)
 
-    vehicles = Vehicle.query.filter_by(
-        workshop_id=workshop_id,
-        is_active=True
-    ).all()
+    if not workshop_id:
+        return error_response("Workshop not found for this user", 404)
+
+    vehicles = (
+        Vehicle.query
+        .join(Customer)
+        .filter(
+            Vehicle.workshop_id == workshop_id,
+            Vehicle.is_active == True,
+            Customer.is_active == True
+        )
+        .order_by(Vehicle.created_at.desc())
+        .all()
+    )
 
     return jsonify({
         "vehicles": [vehicle.serialize() for vehicle in vehicles]
     }), 200
 
 
+#-------------VEHICLES: CREATE----------------------
+
 @api.route("/vehicles", methods=["POST"])
 @jwt_required()
 def create_vehicle():
 
     current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can create vehicles", 403)
+
+    workshop_id = get_current_workshop_id(current_user)
+
+    if not workshop_id:
+        return error_response("Workshop not found for this user", 404)
+
     data = request.get_json() or {}
 
     customer_id = data.get("customer_id")
@@ -944,8 +820,6 @@ def create_vehicle():
         if existing_vin:
             return error_response("A vehicle with this VIN already exists", 409)
 
-    workshop_id = get_current_workshop_id(current_user)
-
     vehicle = Vehicle(
         customer_id=customer.id,
         workshop_id=workshop_id,
@@ -972,11 +846,17 @@ def create_vehicle():
     }), 201
 
 
+###------------ VEHICLES ID GETL----------------------
+
 @api.route("/vehicles/<int:vehicle_id>", methods=["GET"])
 @jwt_required()
 def get_vehicle_detail(vehicle_id):
 
     current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can see vehicle details", 403)
+
     vehicle, error = get_vehicle_or_error(vehicle_id, current_user)
 
     if error:
@@ -986,12 +866,17 @@ def get_vehicle_detail(vehicle_id):
         "vehicle": vehicle.serialize()
     }), 200
 
+##---------------VEHICLES:UPDATE----------------------
 
 @api.route("/vehicles/<int:vehicle_id>", methods=["PUT"])
 @jwt_required()
 def update_vehicle(vehicle_id):
 
     current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can update vehicles", 403)
+
     vehicle, error = get_vehicle_or_error(vehicle_id, current_user)
 
     if error:
@@ -1042,8 +927,7 @@ def update_vehicle(vehicle_id):
         "power_hp",
         "engine_cc",
         "color",
-        "mileage",
-        "is_active"
+        "mileage"
     ]
 
     for field in editable_fields:
@@ -1061,11 +945,17 @@ def update_vehicle(vehicle_id):
     }), 200
 
 
+###---------------VEHICLES: DELETE --------------------
+
 @api.route("/vehicles/<int:vehicle_id>", methods=["DELETE"])
 @jwt_required()
 def delete_vehicle(vehicle_id):
 
     current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can delete vehicles", 403)
+
     vehicle, error = get_vehicle_or_error(vehicle_id, current_user)
 
     if error:
@@ -1079,27 +969,281 @@ def delete_vehicle(vehicle_id):
     }), 200
 
 
-###---------------SERVICES----------------------
+##---------------CUSTOMERS: SERIALIZER----------------------
+
+# Customer helper
+def serialize_customer_with_vehicles(customer):
+
+    customer_data = customer.serialize()
+
+    active_vehicles = []
+
+    for vehicle in customer.vehicles:
+        if vehicle.is_active:
+            active_vehicles.append(vehicle)
+
+    customer_data["vehicles_count"] = len(active_vehicles)
+
+    customer_data["vehicles"] = [
+        {
+            "id": vehicle.id,
+            "plate": vehicle.plate,
+            "brand": vehicle.brand,
+            "model": vehicle.model,
+            "version": vehicle.version,
+            "year": vehicle.year,
+            "fuel_type": vehicle.fuel_type,
+            "mileage": vehicle.mileage,
+            "customer_id": vehicle.customer_id,
+            "workshop_id": vehicle.workshop_id,
+            "is_active": vehicle.is_active
+        }
+        for vehicle in active_vehicles
+    ]
+
+    return customer_data
+
+
+###---------------CUSTOMERS GET--------------------
+
+@api.route("/customers", methods=["GET"])
+@jwt_required()
+def get_customers():
+
+    current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can see customers", 403)
+
+    workshop_id = get_current_workshop_id(current_user)
+
+    if not workshop_id:
+        return error_response("Workshop not found for this user", 404)
+
+    customers = (
+        Customer.query
+        .filter_by(
+            workshop_id=workshop_id,
+            is_active=True
+        )
+        .order_by(Customer.created_at.desc())
+        .all()
+    )
+
+    return jsonify({
+        "customers": [
+            serialize_customer_with_vehicles(customer)
+            for customer in customers
+        ]
+    }), 200
+   
+
+
+#-------------CUSTOMERS CREATE----------------
+
+@api.route("/customers", methods=["POST"])
+@jwt_required()
+def create_customer():
+
+    current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can create customers", 403)
+
+    data = request.get_json() or {}
+
+    first_name = data.get("first_name")
+    last_name = data.get("last_name")
+    dni = data.get("dni")
+    driving_license = data.get("driving_license")
+    phone = data.get("phone")
+    email = data.get("email")
+    address = data.get("address")
+
+    if not first_name or not last_name or not dni or not driving_license or not phone:
+        return error_response("first_name, last_name, dni, driving_license and phone are required", 400)
+
+    existing_customer_dni = Customer.query.filter_by(dni=dni).first()
+
+    if existing_customer_dni:
+        return error_response("A customer with this DNI already exists", 409)
+
+    existing_customer_license = Customer.query.filter_by(driving_license=driving_license).first()
+
+    if existing_customer_license:
+        return error_response("A customer with this driving license already exists", 409)
+
+    workshop_id = get_current_workshop_id(current_user)
+
+    if not workshop_id:
+        return error_response("Workshop not found for this user", 404)
+
+    customer = Customer(
+        first_name=first_name,
+        last_name=last_name,
+        dni=dni,
+        driving_license=driving_license,
+        phone=phone,
+        email=email,
+        address=address,
+        workshop_id=workshop_id
+    )
+
+    db.session.add(customer)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Customer created successfully",
+        "customer": serialize_customer_with_vehicles(customer)
+    }), 201
+
+
+##--------------CUSTOMERS GET----------------------
+
+@api.route("/customers/<int:customer_id>", methods=["GET"])
+@jwt_required()
+def get_customer_detail(customer_id):
+
+    current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can see customer details", 403)
+
+    customer, error = get_customer_or_error(customer_id, current_user)
+
+    if error:
+        return error
+
+    return jsonify({
+        "customer": serialize_customer_with_vehicles(customer)
+    }), 200
+
+
+###---------------CUSTOMERS UPDATE----------------------
+
+@api.route("/customers/<int:customer_id>", methods=["PUT"])
+@jwt_required()
+def update_customer(customer_id):
+
+    current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can update customers", 403)
+
+    customer, error = get_customer_or_error(customer_id, current_user)
+
+    if error:
+        return error
+
+    data = request.get_json() or {}
+
+    if "dni" in data and data.get("dni") != customer.dni:
+        existing_customer_dni = Customer.query.filter(
+            Customer.dni == data.get("dni"),
+            Customer.id != customer.id
+        ).first()
+
+        if existing_customer_dni:
+            return error_response("A customer with this DNI already exists", 409)
+
+    if "driving_license" in data and data.get("driving_license") != customer.driving_license:
+        existing_customer_license = Customer.query.filter(
+            Customer.driving_license == data.get("driving_license"),
+            Customer.id != customer.id
+        ).first()
+
+        if existing_customer_license:
+            return error_response("A customer with this driving license already exists", 409)
+
+    editable_fields = [
+        "first_name",
+        "last_name",
+        "dni",
+        "driving_license",
+        "phone",
+        "email",
+        "address"
+    ]
+
+    for field in editable_fields:
+        if field in data:
+            setattr(customer, field, data[field])
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Customer updated successfully",
+        "customer": serialize_customer_with_vehicles(customer)
+    }), 200
+
+
+##------------CUSTOMERS:DELETE----------------------
+
+@api.route("/customers/<int:customer_id>", methods=["DELETE"])
+@jwt_required()
+def delete_customer(customer_id):
+
+    current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can delete customers", 403)
+
+    customer, error = get_customer_or_error(customer_id, current_user)
+
+    if error:
+        return error
+
+    customer.is_active = False
+    db.session.commit()
+
+    return jsonify({
+        "message": "Customer deactivated successfully"
+    }), 200
+
+###---------------SERVICES---------------------------
+###---------------SERVICES GET----------------------
 
 @api.route("/services", methods=["GET"])
 @jwt_required()
 def get_services():
 
     current_user = get_current_user()
+
+    if not is_admin(current_user) and not is_mechanic(current_user):
+        return error_response("Only admin or mechanic users can see services", 403)
+
     workshop_id = get_current_workshop_id(current_user)
 
-    status = request.args.get("status")
-    vehicle_id = request.args.get("vehicle_id", type=int)
-    employee_id = request.args.get("employee_id", type=int)
+    if not workshop_id:
+        return error_response("Workshop not found for this user", 404)
 
     query = Service.query.filter_by(workshop_id=workshop_id)
 
     if is_mechanic(current_user):
-        employee = get_current_employee(current_user)
-        query = query.filter_by(employee_id=employee.id)
+        current_employee = get_current_employee(current_user)
+
+        if not current_employee:
+            return error_response("Employee profile not found", 404)
+
+        query = query.filter_by(employee_id=current_employee.id)
+
+    status = request.args.get("status")
+    customer_id = request.args.get("customer_id")
+    vehicle_id = request.args.get("vehicle_id")
+    employee_id = request.args.get("employee_id")
 
     if status:
+        if status not in SERVICE_STATUSES:
+            return jsonify({
+                "message": "Invalid status",
+                "error": "Invalid status",
+                "allowed_values": SERVICE_STATUSES
+            }), 400
+
         query = query.filter_by(status=status)
+
+    if customer_id:
+        query = query.filter_by(customer_id=customer_id)
 
     if vehicle_id:
         query = query.filter_by(vehicle_id=vehicle_id)
@@ -1107,12 +1251,18 @@ def get_services():
     if employee_id and is_admin(current_user):
         query = query.filter_by(employee_id=employee_id)
 
-    services = query.order_by(Service.created_at.desc()).all()
+    services = (
+        query
+        .order_by(Service.created_at.desc())
+        .all()
+    )
 
     return jsonify({
         "services": [service.serialize() for service in services]
     }), 200
 
+
+###---------------SERVICES CREATE----------------------
 
 @api.route("/services", methods=["POST"])
 @jwt_required()
@@ -1123,10 +1273,12 @@ def create_service():
     if not is_admin(current_user):
         return error_response("Only admin users can create services", 403)
 
-    data = request.get_json() or {}
+    workshop_id = get_current_workshop_id(current_user)
 
-    vehicle_id = data.get("vehicle_id")
-    employee_id = data.get("employee_id")
+    if not workshop_id:
+        return error_response("Workshop not found for this user", 404)
+
+    data = request.get_json() or {}
 
     title = data.get("title")
     description = data.get("description")
@@ -1134,13 +1286,17 @@ def create_service():
     status = data.get("status", "pending")
     priority = data.get("priority", "normal")
 
+    customer_id = data.get("customer_id")
+    vehicle_id = data.get("vehicle_id")
+    employee_id = data.get("employee_id") or None
+
     entry_mileage = data.get("entry_mileage")
     start_date = data.get("start_date")
     end_date = data.get("end_date")
     observations = data.get("observations")
 
-    if not vehicle_id or not title or not service_type:
-        return error_response("vehicle_id, title and service_type are required", 400)
+    if not title or not service_type or not customer_id or not vehicle_id:
+        return error_response("title, service_type, customer_id and vehicle_id are required", 400)
 
     if service_type not in SERVICE_TYPES:
         return jsonify({
@@ -1163,18 +1319,29 @@ def create_service():
             "allowed_values": SERVICE_PRIORITIES
         }), 400
 
+    customer, error = get_customer_or_error(customer_id, current_user)
+
+    if error:
+        return error
+
     vehicle, error = get_vehicle_or_error(vehicle_id, current_user)
 
     if error:
         return error
 
+    if vehicle.customer_id != customer.id:
+        return error_response("This vehicle does not belong to the selected customer", 400)
+
+    assigned_employee = None
+
     if employee_id:
-        employee, error = get_employee_or_error(employee_id, current_user)
+        assigned_employee, error = get_employee_or_error(employee_id, current_user)
 
         if error:
             return error
 
-    workshop_id = get_current_workshop_id(current_user)
+        if assigned_employee.role != "mechanic":
+            return error_response("The assigned employee must be a mechanic", 400)
 
     service = Service(
         title=title,
@@ -1187,79 +1354,82 @@ def create_service():
         end_date=parse_datetime(end_date) if end_date else None,
         observations=observations,
         workshop_id=workshop_id,
-        customer_id=vehicle.customer_id,
+        customer_id=customer.id,
         vehicle_id=vehicle.id,
-        employee_id=employee_id
+        employee_id=assigned_employee.id if assigned_employee else None
     )
 
     db.session.add(service)
     db.session.flush()
 
-    status_log = ServiceStatusLog(
-        service_id=service.id,
-        from_status=None,
-        to_status=status,
-        employee_id=get_current_employee(current_user).id,
-        note="Service created"
-    )
+    current_employee = get_current_employee(current_user)
 
-    db.session.add(status_log)
+    if current_employee:
+        status_log = ServiceStatusLog(
+            service_id=service.id,
+            from_status=None,
+            to_status=service.status,
+            employee_id=current_employee.id,
+            note="Service created"
+        )
+
+        db.session.add(status_log)
+
     db.session.commit()
 
     return jsonify({
         "message": "Service created successfully",
-        "service": service.serialize(),
-        "status_log": status_log.serialize()
+        "service": service.serialize()
     }), 201
 
+
+###---------------SERVICES ID GET----------------------
 
 @api.route("/services/<int:service_id>", methods=["GET"])
 @jwt_required()
 def get_service_detail(service_id):
 
     current_user = get_current_user()
+
+    if not is_admin(current_user) and not is_mechanic(current_user):
+        return error_response("Only admin or mechanic users can see service details", 403)
+
     service, error = get_service_or_error(service_id, current_user)
 
     if error:
         return error
 
     if is_mechanic(current_user):
-        employee = get_current_employee(current_user)
+        current_employee = get_current_employee(current_user)
 
-        if service.employee_id != employee.id:
-            return error_response("You do not have permission to access this service", 403)
+        if not current_employee:
+            return error_response("Employee profile not found", 404)
+
+        if service.employee_id != current_employee.id:
+            return error_response("You do not have permission to see this service", 403)
 
     return jsonify({
         "service": service.serialize()
     }), 200
 
 
+###---------------SERVICES UPDATE----------------------
+
 @api.route("/services/<int:service_id>", methods=["PUT"])
 @jwt_required()
 def update_service(service_id):
 
     current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can update services", 403)
+
     service, error = get_service_or_error(service_id, current_user)
 
     if error:
         return error
 
     data = request.get_json() or {}
-
-    if is_mechanic(current_user):
-        employee = get_current_employee(current_user)
-
-        if service.employee_id != employee.id:
-            return error_response("You do not have permission to update this service", 403)
-
-        allowed_mechanic_fields = [
-            "status",
-            "observations"
-        ]
-
-        for field in data:
-            if field not in allowed_mechanic_fields:
-                return error_response("Mechanics can only update status and observations", 403)
 
     if "service_type" in data and data.get("service_type") not in SERVICE_TYPES:
         return jsonify({
@@ -1282,23 +1452,53 @@ def update_service(service_id):
             "allowed_values": SERVICE_PRIORITIES
         }), 400
 
-    if "employee_id" in data and data.get("employee_id"):
-        employee, error = get_employee_or_error(data.get("employee_id"), current_user)
+    customer = service.customer
+    vehicle = service.vehicle
+
+    if "customer_id" in data and data.get("customer_id"):
+        customer, error = get_customer_or_error(data.get("customer_id"), current_user)
 
         if error:
             return error
 
-    old_status = service.status
+    if "vehicle_id" in data and data.get("vehicle_id"):
+        vehicle, error = get_vehicle_or_error(data.get("vehicle_id"), current_user)
+
+        if error:
+            return error
+
+    if customer and vehicle and vehicle.customer_id != customer.id:
+        return error_response("This vehicle does not belong to the selected customer", 400)
+
+    if "employee_id" in data:
+        employee_id = data.get("employee_id") or None
+
+        if employee_id:
+            assigned_employee, error = get_employee_or_error(employee_id, current_user)
+
+            if error:
+                return error
+
+            if assigned_employee.role != "mechanic":
+                return error_response("The assigned employee must be a mechanic", 400)
+
+            service.employee_id = assigned_employee.id
+        else:
+            service.employee_id = None
+
+    if "customer_id" in data and customer:
+        service.customer_id = customer.id
+
+    if "vehicle_id" in data and vehicle:
+        service.vehicle_id = vehicle.id
 
     editable_fields = [
         "title",
         "description",
         "service_type",
-        "status",
         "priority",
         "entry_mileage",
-        "observations",
-        "employee_id"
+        "observations"
     ]
 
     for field in editable_fields:
@@ -1306,21 +1506,23 @@ def update_service(service_id):
             setattr(service, field, data[field])
 
     if "start_date" in data:
-        service.start_date = parse_datetime(data.get("start_date"))
+        service.start_date = parse_datetime(data.get("start_date")) if data.get("start_date") else None
 
     if "end_date" in data:
-        service.end_date = parse_datetime(data.get("end_date"))
+        service.end_date = parse_datetime(data.get("end_date")) if data.get("end_date") else None
 
-    if "status" in data and data.get("status") != old_status:
-        status_log = ServiceStatusLog(
-            service_id=service.id,
-            from_status=old_status,
-            to_status=data.get("status"),
-            employee_id=get_current_employee(current_user).id,
-            note=data.get("status_note")
-        )
+    if "status" in data:
+        new_status = data.get("status")
 
-        db.session.add(status_log)
+        if new_status != service.status:
+            current_employee = get_current_employee(current_user)
+
+            create_status_log(
+                service=service,
+                employee_id=current_employee.id if current_employee else None,
+                new_status=new_status,
+                note=data.get("status_note")
+            )
 
     db.session.commit()
 
@@ -1330,56 +1532,34 @@ def update_service(service_id):
     }), 200
 
 
-@api.route("/services/<int:service_id>", methods=["DELETE"])
-@jwt_required()
-def delete_service(service_id):
-
-    current_user = get_current_user()
-
-    if not is_admin(current_user):
-        return error_response("Only admin users can cancel services", 403)
-
-    service, error = get_service_or_error(service_id, current_user)
-
-    if error:
-        return error
-
-    if service.status != "cancelled":
-        create_status_log(
-            service=service,
-            employee_id=get_current_employee(current_user).id,
-            new_status="cancelled",
-            note="Service cancelled"
-        )
-
-    db.session.commit()
-
-    return jsonify({
-        "message": "Service cancelled successfully",
-        "service": service.serialize()
-    }), 200
-
+###---------------SERVICES STATUS UPDATE----------------------
 
 @api.route("/services/<int:service_id>/status", methods=["PATCH"])
 @jwt_required()
 def update_service_status(service_id):
 
     current_user = get_current_user()
+
+    if not is_admin(current_user) and not is_mechanic(current_user):
+        return error_response("Only admin or mechanic users can update service status", 403)
+
     service, error = get_service_or_error(service_id, current_user)
 
     if error:
         return error
 
-    if is_mechanic(current_user):
-        employee = get_current_employee(current_user)
+    current_employee = get_current_employee(current_user)
 
-        if service.employee_id != employee.id:
-            return error_response("You do not have permission to update this service", 403)
+    if not current_employee:
+        return error_response("Employee profile not found", 404)
+
+    if is_mechanic(current_user) and service.employee_id != current_employee.id:
+        return error_response("You do not have permission to update this service", 403)
 
     data = request.get_json() or {}
 
     new_status = data.get("status")
-    note = data.get("note") or data.get("comment")
+    note = data.get("note")
 
     if not new_status:
         return error_response("status is required", 400)
@@ -1397,49 +1577,47 @@ def update_service_status(service_id):
             "service": service.serialize()
         }), 200
 
-    status_log = create_status_log(
+    create_status_log(
         service=service,
-        employee_id=get_current_employee(current_user).id,
+        employee_id=current_employee.id,
         new_status=new_status,
         note=note
     )
-
-    if note:
-        comment = ServiceComment(
-            service_id=service.id,
-            employee_id=get_current_employee(current_user).id,
-            comment=note,
-            comment_type="status_update"
-        )
-
-        db.session.add(comment)
 
     db.session.commit()
 
     return jsonify({
         "message": "Service status updated successfully",
-        "service": service.serialize(),
-        "status_log": status_log.serialize()
+        "service": service.serialize()
     }), 200
 
+
+###---------------SERVICES STATUS LOGS GET----------------------
 
 @api.route("/services/<int:service_id>/status-logs", methods=["GET"])
 @jwt_required()
 def get_service_status_logs(service_id):
 
     current_user = get_current_user()
+
+    if not is_admin(current_user) and not is_mechanic(current_user):
+        return error_response("Only admin or mechanic users can see service status logs", 403)
+
     service, error = get_service_or_error(service_id, current_user)
 
     if error:
         return error
 
     if is_mechanic(current_user):
-        employee = get_current_employee(current_user)
+        current_employee = get_current_employee(current_user)
 
-        if service.employee_id != employee.id:
-            return error_response("You do not have permission to access this service", 403)
+        if not current_employee:
+            return error_response("Employee profile not found", 404)
 
-    status_logs = (
+        if service.employee_id != current_employee.id:
+            return error_response("You do not have permission to see these logs", 403)
+
+    logs = (
         ServiceStatusLog.query
         .filter_by(service_id=service.id)
         .order_by(ServiceStatusLog.changed_at.desc())
@@ -1447,11 +1625,43 @@ def get_service_status_logs(service_id):
     )
 
     return jsonify({
-        "status_logs": [status_log.serialize() for status_log in status_logs]
+        "status_logs": [log.serialize() for log in logs]
     }), 200
 
 
-###---------------SERVICE COMMENTS----------------------
+###---------------SERVICES DELETE----------------------
+
+@api.route("/services/<int:service_id>", methods=["DELETE"])
+@jwt_required()
+def delete_service(service_id):
+
+    current_user = get_current_user()
+
+    if not is_admin(current_user):
+        return error_response("Only admin users can delete services", 403)
+
+    service, error = get_service_or_error(service_id, current_user)
+
+    if error:
+        return error
+
+    current_employee = get_current_employee(current_user)
+
+    if service.status != "cancelled":
+        create_status_log(
+            service=service,
+            employee_id=current_employee.id if current_employee else None,
+            new_status="cancelled",
+            note="Service cancelled"
+        )
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Service cancelled successfully",
+        "service": service.serialize()
+    }), 200
+###----------SERVICE COMMENTS GET---------------------
 
 @api.route("/services/<int:service_id>/comments", methods=["GET"])
 @jwt_required()
@@ -1465,6 +1675,9 @@ def get_service_comments(service_id):
 
     if is_mechanic(current_user):
         employee = get_current_employee(current_user)
+
+        if not employee:
+            return error_response("Employee profile not found", 404)
 
         if service.employee_id != employee.id:
             return error_response("You do not have permission to access these comments", 403)
@@ -1480,6 +1693,7 @@ def get_service_comments(service_id):
         "comments": [comment.serialize() for comment in comments]
     }), 200
 
+###--------------- SERVICE COMMENTS CREATE -------------
 
 @api.route("/services/<int:service_id>/comments", methods=["POST"])
 @jwt_required()
@@ -1491,10 +1705,13 @@ def create_service_comment(service_id):
     if error:
         return error
 
-    if is_mechanic(current_user):
-        employee = get_current_employee(current_user)
+    current_employee = get_current_employee(current_user)
 
-        if service.employee_id != employee.id:
+    if not current_employee:
+        return error_response("Employee profile not found", 404)
+
+    if is_mechanic(current_user):
+        if service.employee_id != current_employee.id:
             return error_response("You do not have permission to comment on this service", 403)
 
     data = request.get_json() or {}
@@ -1514,7 +1731,7 @@ def create_service_comment(service_id):
 
     comment = ServiceComment(
         service_id=service.id,
-        employee_id=get_current_employee(current_user).id,
+        employee_id=current_employee.id,
         comment=comment_text,
         comment_type=comment_type
     )
@@ -1528,6 +1745,8 @@ def create_service_comment(service_id):
     }), 201
 
 
+##------------COMMENTS: NOTIFY ADMIN---------------
+
 @api.route("/services/<int:service_id>/notify-admin", methods=["POST"])
 @jwt_required()
 def notify_admin(service_id):
@@ -1538,10 +1757,13 @@ def notify_admin(service_id):
     if error:
         return error
 
-    if is_mechanic(current_user):
-        employee = get_current_employee(current_user)
+    current_employee = get_current_employee(current_user)
 
-        if service.employee_id != employee.id:
+    if not current_employee:
+        return error_response("Employee profile not found", 404)
+
+    if is_mechanic(current_user):
+        if service.employee_id != current_employee.id:
             return error_response("You do not have permission to notify admin about this service", 403)
 
     data = request.get_json() or {}
@@ -1552,7 +1774,7 @@ def notify_admin(service_id):
 
     comment = ServiceComment(
         service_id=service.id,
-        employee_id=get_current_employee(current_user).id,
+        employee_id=current_employee.id,
         comment=message,
         comment_type="admin_alert"
     )
@@ -1566,7 +1788,7 @@ def notify_admin(service_id):
     }), 201
 
 
-###---------------MECHANIC DASHBOARD----------------------
+##-------------MECHANIC DASHBOARD------------------
 
 @api.route("/mechanic/services", methods=["GET"])
 @jwt_required()
@@ -1578,7 +1800,14 @@ def get_my_mechanic_services():
         return error_response("Only mechanic users can access this endpoint", 403)
 
     employee = get_current_employee(current_user)
+
+    if not employee:
+        return error_response("Employee profile not found", 404)
+
     workshop_id = get_current_workshop_id(current_user)
+
+    if not workshop_id:
+        return error_response("Workshop not found for this user", 404)
 
     services = (
         Service.query
@@ -1591,7 +1820,12 @@ def get_my_mechanic_services():
     )
 
     assigned_count = len(services)
-    in_repair_count = len([service for service in services if service.status == "in_repair"])
+
+    in_repair_count = len([
+        service for service in services
+        if service.status == "in_repair"
+    ])
+
     finished_count = len([
         service for service in services
         if service.status in ["ready_to_deliver", "delivered"]
@@ -1607,7 +1841,7 @@ def get_my_mechanic_services():
     }), 200
 
 
-###---------------ADMIN DASHBOARD----------------------
+##-------------ADMIN DASHBOARD----------------------
 
 @api.route("/admin/dashboard", methods=["GET"])
 @jwt_required()
@@ -1620,10 +1854,19 @@ def get_admin_dashboard():
 
     workshop_id = get_current_workshop_id(current_user)
 
-    active_vehicles = Vehicle.query.filter_by(
-        workshop_id=workshop_id,
-        is_active=True
-    ).count()
+    if not workshop_id:
+        return error_response("Workshop not found for this user", 404)
+
+    active_vehicles = (
+        Vehicle.query
+        .join(Customer)
+        .filter(
+            Vehicle.workshop_id == workshop_id,
+            Vehicle.is_active == True,
+            Customer.is_active == True
+        )
+        .count()
+    )
 
     mechanics_count = Employee.query.filter_by(
         workshop_id=workshop_id,
@@ -1658,4 +1901,107 @@ def get_admin_dashboard():
             "budget_pending": budget_pending
         },
         "services_by_status": services_by_status
+    }), 200
+
+####-----------------------------###--------------------------
+    
+###-------------- FORGOT PASSWORD----------------------
+
+@api.route("/forgot-password", methods=["POST"])
+def forgot_password():
+
+    data = request.get_json() or {}
+
+    email = data.get("email")
+
+    if not email:
+        return error_response("email is required", 400)
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        return jsonify({
+            "message": "If the email exists, a password reset link has been generated"
+        }), 200
+
+    now = datetime.now(timezone.utc)
+
+    previous_tokens = PasswordResetToken.query.filter_by(
+        user_id=user.id,
+        used_at=None
+    ).all()
+
+    for previous_token in previous_tokens:
+        previous_token.used_at = now
+
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+    reset_token = PasswordResetToken(
+        user_id=user.id,
+        token_hash=token_hash,
+        expires_at=now + timedelta(minutes=30)
+    )
+
+    db.session.add(reset_token)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Password reset token generated successfully",
+        "reset_token": raw_token
+    }), 200
+
+
+###--------------RESET PASSWORD----------------------
+
+@api.route("/reset-password", methods=["POST"])
+def reset_password():
+
+    data = request.get_json() or {}
+
+    raw_token = data.get("token")
+    password = data.get("password")
+    password_confirm = data.get("password_confirm")
+
+    if not raw_token or not password or not password_confirm:
+        return error_response("token, password and password_confirm are required", 400)
+
+    if password != password_confirm:
+        return error_response("Passwords do not match", 400)
+
+    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+    reset_token = PasswordResetToken.query.filter_by(
+        token_hash=token_hash,
+        used_at=None
+    ).first()
+
+    if not reset_token:
+        return error_response("Invalid or expired reset token", 400)
+
+    now = datetime.now(timezone.utc)
+
+    expires_at = reset_token.expires_at
+
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at < now:
+        reset_token.used_at = now
+        db.session.commit()
+
+        return error_response("Invalid or expired reset token", 400)
+
+    user = User.query.get(reset_token.user_id)
+
+    if not user:
+        return error_response("User not found", 404)
+
+    password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
+
+    user.password_hash = password_hash
+    reset_token.used_at = now
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Password updated successfully"
     }), 200

@@ -62,11 +62,7 @@ class User(db.Model):
     employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), unique=True, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    employee = db.relationship(
-        "Employee",
-        backref=db.backref("user", uselist=False),
-        uselist=False
-    )
+    employee = db.relationship("Employee", backref=db.backref("user", uselist=False), uselist=False)
 
     def serialize(self):
 
@@ -101,9 +97,7 @@ class Employee(db.Model):
     role = db.Column(db.String(20), nullable=False, default="mechanic")
     job_position = db.Column(db.String(80), nullable=True)
     specialty = db.Column(db.String(120), nullable=True)
-
     workshop_id = db.Column(db.Integer, db.ForeignKey("workshops.id"), nullable=False)
-
     is_active = db.Column(db.Boolean(), default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -376,4 +370,32 @@ class ServiceStatusLog(db.Model):
             "note": self.note,
             "changed_at": self.changed_at.isoformat() if self.changed_at else None
 
+        }
+
+# ============================================================
+#   PASSWORD RESET
+# ============================================================
+
+class PasswordResetToken(db.Model):
+    __tablename__ = "password_reset_tokens"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    token_hash = db.Column(db.String(255), nullable=False, unique=True)
+
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used_at = db.Column(db.DateTime, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = db.relationship("User", backref="password_reset_tokens")
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "used_at": self.used_at.isoformat() if self.used_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None
         }

@@ -1,12 +1,18 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import {Home, LogOut, ClipboardPlus, Users, Car, Wrench,
-} from "lucide-react";
+import {Home, LogOut, ClipboardPlus, Users, Car, Wrench } from "lucide-react";
 
 const getStoredItem = (key) => {
+  const storedValue = localStorage.getItem(key);
+
+  if (!storedValue) {
+    return null;
+  }
+
   try {
-    return JSON.parse(localStorage.getItem(key));
+    return JSON.parse(storedValue);
   } catch {
+    localStorage.removeItem(key);
     return null;
   }
 };

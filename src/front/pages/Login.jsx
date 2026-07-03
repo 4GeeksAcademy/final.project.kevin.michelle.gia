@@ -2,13 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import styles from "./Login.module.css";
 import little_logo from "../assets/img/little_logo.png";
-
-const RAW_BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
-
-const API_BASE_URL = RAW_BACKEND_URL.endsWith("/api")
-  ? RAW_BACKEND_URL
-  : `${RAW_BACKEND_URL.replace(/\/$/, "")}/api`;
+import { loginUser } from "../services/api";
 
 export const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -21,52 +15,47 @@ export const Login = () => {
   const navigate = useNavigate();
 
   const handleLogin = async (event) => {
-    event.preventDefault();
+  event.preventDefault();
 
-    setError(null);
-    setLoading(true);
+  setError(null);
+  setLoading(true);
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email: email.trim(),
-          password
-        })
-      });
+  try {
+    const res = await loginUser(email.trim(), password);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || data.message || "Login failed. Please try again.");
-        return;
-      }
-
-      if (!data.token || !data.user || !data.employee) {
-        setError("Login response is missing token, user or employee data.");
-        console.log("Login response:", data);
-        return;
-      }
-
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      localStorage.setItem("employee", JSON.stringify(data.employee));
-
-      if (data.workshop) {
-        localStorage.setItem("workshop", JSON.stringify(data.workshop));
-      }
-
-      navigate("/dashboard");
-    } catch (err) {
-      console.error("Login error:", err);
-      setError("Failed to connect to the server.");
-    } finally {
-      setLoading(false);
+    if (!res.ok) {
+      setError(
+        res.data?.error ||
+        res.data?.message ||
+        "Login failed. Please try again."
+      );
+      return;
     }
-  };
+
+    const data = res.data;
+
+    if (!data.token || !data.user || !data.employee) {
+      setError("Login response is missing token, user or employee data.");
+      console.log("Login response:", data);
+      return;
+    }
+
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    localStorage.setItem("employee", JSON.stringify(data.employee));
+
+    if (data.workshop) {
+      localStorage.setItem("workshop", JSON.stringify(data.workshop));
+    }
+
+    navigate("/dashboard");
+  } catch (err) {
+    console.error("Login error:", err);
+    setError("Failed to connect to the server.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className={`container-fluid min-vh-100 ${styles.loginPage}`}>

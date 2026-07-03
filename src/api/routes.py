@@ -1,6 +1,4 @@
 from datetime import datetime, timezone, timedelta
-import hashlib
-import secrets
 from flask import Blueprint, request, jsonify
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
@@ -1932,8 +1930,8 @@ def forgot_password():
     for previous_token in previous_tokens:
         previous_token.used_at = now
 
-    raw_token = secrets.token_urlsafe(32)
-    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
 
     reset_token = PasswordResetToken(
         user_id=user.id,
@@ -1967,7 +1965,7 @@ def reset_password():
     if password != password_confirm:
         return error_response("Passwords do not match", 400)
 
-    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
 
     reset_token = PasswordResetToken.query.filter_by(
         token_hash=token_hash,

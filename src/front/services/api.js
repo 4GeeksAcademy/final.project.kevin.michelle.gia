@@ -17,23 +17,13 @@ const parseResponse = async (response) => {
   };
 };
 
-///////////////////////workshop//////////////////////////////////
-export const createWorkshop = async (payload) => {
-  const response = await fetch(`${API_BASE_URL}/workshops`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  return await parseResponse(response);
-};
 
 ////////////////////////Register////////////////////////////////////////
 export const registerWorkshop = async (payload) => {
   const response = await fetch(`${API_BASE_URL}/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payload)
   });
 
   return await parseResponse(response);
@@ -50,7 +40,7 @@ export const loginUser = async (email, password) => {
   return await parseResponse(response);
 };
 
-///////////////AUTHENTICATED FETCH//////////////
+///////////////AUTHENTICATED FETCH (endpoints -> login)//////////////
 
 export async function apiFetch(path, { method = "GET", body } = {}) {
   const token = localStorage.getItem("token");

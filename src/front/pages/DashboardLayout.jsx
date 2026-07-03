@@ -25,7 +25,7 @@ export const DashboardLayout = ({ allowedRole, children }) => {
   const user = getStoredObject("user");
   const employee = getStoredObject("employee");
 
-  if (!token || !user) {
+  if (!token || !user || !employee) {
     return <Navigate to="/login" replace />;
   }
 
@@ -42,6 +42,7 @@ export const DashboardLayout = ({ allowedRole, children }) => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     localStorage.removeItem("employee");
+    localStorage.removeItem("workshop");
 
     navigate("/login");
   };

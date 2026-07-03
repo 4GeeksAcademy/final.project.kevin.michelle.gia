@@ -1,4 +1,4 @@
-import { createBrowserRouter, createRoutesFromElements, Route,} from "react-router-dom";
+import { createBrowserRouter, createRoutesFromElements, Route } from "react-router-dom";
 
 import { Layout } from "./pages/Layout";
 import { Home } from "./pages/Home";
@@ -13,7 +13,7 @@ import { DashboardLayout } from "./pages/DashboardLayout";
 import { AdminDashboard } from "./pages/AdminDashboard";
 import { MechanicDashboard } from "./pages/MechanicDashboard";
 
-import Customer from "./pages/CustomerList";
+import CustomerList from "./pages/CustomerList";
 import { ServiceFormPage } from "./pages/ServiceFormPage";
 import MechanicList from "./pages/MechanicList";
 import VehicleList from "./pages/VehicleList";
@@ -26,7 +26,6 @@ const Routes = createRoutesFromElements(
         <Route path="forgot-password" element={<ForgotPassword />} />
         <Route path="dashboard" element={<Dashboard />} />
 
-        {/* Admin routes con sidebar */}
         <Route
             path="admin"
             element={
@@ -40,7 +39,7 @@ const Routes = createRoutesFromElements(
             path="admin/customers"
             element={
                 <DashboardLayout allowedRole="admin">
-                    <Customer />
+                    <CustomerList />
                 </DashboardLayout>
             }
         />
@@ -72,7 +71,6 @@ const Routes = createRoutesFromElements(
             }
         />
 
-        {/* Mechanic routes con sidebar */}
         <Route
             path="mechanic"
             element={
@@ -82,7 +80,6 @@ const Routes = createRoutesFromElements(
             }
         />
 
-        {/* Rutas viejas / pruebas */}
         <Route path="single/:theId" element={<Single />} />
         <Route path="demo" element={<Demo />} />
     </Route>

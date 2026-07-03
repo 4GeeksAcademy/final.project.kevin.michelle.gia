@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -9,14 +8,9 @@ import {
   UserRound,
   Wrench,
 } from "lucide-react";
+import { apiFetch } from "../services/api";
+import { ServiceDetailsModal } from "./ServiceDetailsModal";
 import "./ServiceStatusBoard.css";
-
-const RAW_BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:3001";
-
-const API_BASE_URL = RAW_BACKEND_URL.endsWith("/api")
-  ? RAW_BACKEND_URL
-  : `${RAW_BACKEND_URL.replace(/\/$/, "")}/api`;
 
 const BOARD_COLUMNS = [
   {
@@ -70,19 +64,6 @@ const PRIORITY_LABELS = {
 
 const STATUS_FLOW_COLUMNS = BOARD_COLUMNS;
 
-function buildUrl(path) {
-  return `${API_BASE_URL}${path}`;
-}
-
-function getAuthHeaders() {
-  const token = localStorage.getItem("token");
-
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-  };
-}
-
 function formatDate(dateValue) {
   if (!dateValue) return "No date";
 
@@ -96,12 +77,14 @@ function formatDate(dateValue) {
 function normalizeAdminServices(servicesByStatus) {
   if (!servicesByStatus) return [];
 
-  return Object.entries(servicesByStatus).flatMap(([status, services]) =>
-    services.map((service) => ({
+  return Object.entries(servicesByStatus).flatMap(([status, services]) => {
+    const serviceList = Array.isArray(services) ? services : [];
+
+    return serviceList.map((service) => ({
       ...service,
       status: service.status || status,
-    }))
-  );
+    }));
+  });
 }
 
 function getColumnIndexByStatus(status) {
@@ -163,11 +146,10 @@ function getVehicleInfo(service) {
 }
 
 export function ServiceStatusBoard({ role = "admin" }) {
-  const navigate = useNavigate();
-
   const [services, setServices] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [selectedServiceId, setSelectedServiceId] = useState(null);
   const [error, setError] = useState("");
 
   const isMechanic = role === "mechanic";
@@ -179,18 +161,7 @@ export function ServiceStatusBoard({ role = "admin" }) {
 
       const endpoint = isMechanic ? "/mechanic/services" : "/admin/dashboard";
 
-      const response = await fetch(buildUrl(endpoint), {
-        method: "GET",
-        headers: getAuthHeaders(),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || data.message || "Could not load services"
-        );
-      }
+      const data = await apiFetch(endpoint);
 
       if (isMechanic) {
         setServices(data.services || []);
@@ -223,22 +194,13 @@ export function ServiceStatusBoard({ role = "admin" }) {
       setActionLoadingId(serviceId);
       setError("");
 
-      const response = await fetch(buildUrl(`/services/${serviceId}/status`), {
+      await apiFetch(`/services/${serviceId}/status`, {
         method: "PATCH",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
+        body: {
           status: newStatus,
           note: "Status updated from dashboard",
-        }),
+        },
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || data.message || "Could not update status"
-        );
-      }
 
       await fetchServices();
     } catch (error) {
@@ -257,22 +219,12 @@ export function ServiceStatusBoard({ role = "admin" }) {
       setActionLoadingId(serviceId);
       setError("");
 
-      const response = await fetch(
-        buildUrl(`/services/${serviceId}/notify-admin`),
-        {
-          method: "POST",
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            message: message.trim(),
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || data.message || "Could not report issue");
-      }
+      await apiFetch(`/services/${serviceId}/notify-admin`, {
+        method: "POST",
+        body: {
+          message: message.trim(),
+        },
+      });
 
       await fetchServices();
     } catch (error) {
@@ -282,12 +234,12 @@ export function ServiceStatusBoard({ role = "admin" }) {
     }
   }
 
-  function goToServiceDetails(serviceId) {
-    const path = isMechanic
-      ? `/mechanic/services/${serviceId}`
-      : `/admin/services/${serviceId}`;
+  function openServiceDetails(serviceId) {
+    setSelectedServiceId(serviceId);
+  }
 
-    navigate(path);
+  function closeServiceDetails() {
+    setSelectedServiceId(null);
   }
 
   if (isLoading) {
@@ -395,34 +347,12 @@ export function ServiceStatusBoard({ role = "admin" }) {
                             type="button"
                             className="details-link-button"
                             disabled={isUpdating}
-                            onClick={() => goToServiceDetails(service.id)}
+                            onClick={() => openServiceDetails(service.id)}
                           >
                             View details
                           </button>
 
-                          <div className="service-icon-actions">
-                            {isMechanic ? (
-                              <button
-                                type="button"
-                                className="card-icon-action report-action"
-                                title="Report issue to admin"
-                                disabled={isUpdating}
-                                onClick={() => reportIssue(service.id)}
-                              >
-                                <Flag size={15} />
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                className="card-icon-action edit-action"
-                                title="Edit service"
-                                disabled={isUpdating}
-                                onClick={() => goToServiceDetails(service.id)}
-                              >
-                                <Pencil size={15} />
-                              </button>
-                            )}
-                          </div>
+                          
                         </div>
 
                         <div className="service-status-actions">
@@ -471,6 +401,15 @@ export function ServiceStatusBoard({ role = "admin" }) {
           );
         })}
       </div>
+
+      {selectedServiceId && (
+        <ServiceDetailsModal
+          serviceId={selectedServiceId}
+          role={role}
+          onClose={closeServiceDetails}
+          onServiceUpdated={fetchServices}
+        />
+      )}
     </section>
   );
 }

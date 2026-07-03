@@ -17,13 +17,12 @@ app.url_map.strict_slashes = False
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "super-secret-key")
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=8)
 
-db_url = os.getenv("DATABASE_URL")
 
+db_url = os.getenv("DATABASE_URL")
 if db_url is not None:
     app.config["SQLALCHEMY_DATABASE_URI"] = db_url.replace("postgres://", "postgresql://")
 else:
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
-
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)

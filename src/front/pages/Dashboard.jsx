@@ -22,11 +22,11 @@ export const Dashboard = () => {
   const user = getStoredObject("user");
   const employee = getStoredObject("employee");
 
-  if (!token || !user) {
+  if (!token || !user || !employee) {
     return <Navigate to="/login" replace />;
   }
 
-  const role = (employee?.role || user?.role || "").toLowerCase();
+  const role = (employee.role || "").toLowerCase();
 
   if (role === "admin") {
     return <Navigate to="/admin" replace />;

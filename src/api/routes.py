@@ -5,6 +5,7 @@ from flask import Blueprint, request, jsonify
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from sqlalchemy import or_
 import cloudinary.uploader
 from api.models import (
     db,
@@ -1225,7 +1226,12 @@ def get_services():
         if not current_employee:
             return error_response("Employee profile not found", 404)
 
-        query = query.filter_by(employee_id=current_employee.id)
+        query = query.filter(
+            or_(
+                Service.employee_id == current_employee.id,
+                Service.employee_id.is_(None)
+            )
+        )
 
     status = request.args.get("status")
     customer_id = request.args.get("customer_id")
@@ -1405,7 +1411,7 @@ def get_service_detail(service_id):
         if not current_employee:
             return error_response("Employee profile not found", 404)
 
-        if service.employee_id != current_employee.id:
+        if service.employee_id is not None and service.employee_id != current_employee.id:
             return error_response("You do not have permission to see this service", 403)
 
     return jsonify({
@@ -1679,7 +1685,7 @@ def get_service_comments(service_id):
         if not employee:
             return error_response("Employee profile not found", 404)
 
-        if service.employee_id != employee.id:
+        if service.employee_id is not None and service.employee_id != employee.id:
             return error_response("You do not have permission to access these comments", 403)
 
     comments = (
@@ -1836,35 +1842,46 @@ def get_my_mechanic_services():
 
     services = (
         Service.query
-        .filter_by(
-            workshop_id=workshop_id,
-            employee_id=employee.id
+        .filter(
+            Service.workshop_id == workshop_id,
+            or_(
+                Service.employee_id == employee.id,
+                Service.employee_id.is_(None)
+            )
         )
         .order_by(Service.created_at.desc())
         .all()
     )
 
-    assigned_count = len(services)
+    assigned_services = [
+        service for service in services
+        if service.employee_id == employee.id
+    ]
+
+    available_services = [
+        service for service in services
+        if service.employee_id is None
+    ]
 
     in_repair_count = len([
-        service for service in services
+        service for service in assigned_services
         if service.status == "in_repair"
     ])
 
     finished_count = len([
-        service for service in services
+        service for service in assigned_services
         if service.status in ["ready_to_deliver", "delivered"]
     ])
 
     return jsonify({
         "services": [service.serialize() for service in services],
         "stats": {
-            "assigned": assigned_count,
+            "assigned": len(assigned_services),
+            "available": len(available_services),
             "in_repair": in_repair_count,
             "finished": finished_count
         }
     }), 200
-
 
 ##-------------ADMIN DASHBOARD----------------------
 
@@ -2029,4 +2046,37 @@ def reset_password():
 
     return jsonify({
         "message": "Password updated successfully"
+    }), 200
+
+###---------------SERVICE ASSIGN TO ME----------------------
+
+@api.route("/services/<int:service_id>/assign-to-me", methods=["PATCH"])
+@jwt_required()
+def assign_service_to_me(service_id):
+
+    current_user = get_current_user()
+
+    if not is_mechanic(current_user):
+        return error_response("Only mechanics can assign services to themselves", 403)
+
+    current_employee = get_current_employee(current_user)
+
+    if not current_employee:
+        return error_response("Employee profile not found", 404)
+
+    service, error = get_service_or_error(service_id, current_user)
+
+    if error:
+        return error
+
+    if service.employee_id is not None:
+        return error_response("This service is already assigned", 409)
+
+    service.employee_id = current_employee.id
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Service assigned successfully",
+        "service": service.serialize()
     }), 200

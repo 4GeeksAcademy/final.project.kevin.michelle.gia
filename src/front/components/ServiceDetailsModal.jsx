@@ -53,6 +53,14 @@ function formatDateTime(dateValue) {
   }).format(new Date(dateValue));
 }
 
+function getMechanicName(mechanic) {
+  const fullName = `${mechanic.first_name || ""} ${
+    mechanic.last_name || ""
+  }`.trim();
+
+  return mechanic.name || fullName || mechanic.email || `Mechanic #${mechanic.id}`;
+}
+
 function InfoRow({ label, value }) {
   return (
     <div className="col-md-6 mb-3">
@@ -82,8 +90,11 @@ export function ServiceDetailsModal({
   const [error, setError] = useState("");
   const [showMechanicMenu, setShowMechanicMenu] = useState(false);
   const [availableMechanics, setAvailableMechanics] = useState([]);
+  const [loadingMechanics, setLoadingMechanics] = useState(false);
+  const [reassigningMechanic, setReassigningMechanic] = useState(false);
 
   const isMechanic = role === "mechanic";
+  const isAdmin = role === "admin";
 
   async function loadDetails() {
     try {
@@ -103,6 +114,59 @@ export function ServiceDetailsModal({
       setLoading(false);
     }
   }
+
+  async function loadMechanics() {
+  try {
+    setLoadingMechanics(true);
+    setError("");
+
+    const data = await apiFetch("/mechanics");
+
+    setAvailableMechanics(data.mechanics || []);
+  } catch (error) {
+    setError(error.message || "Could not load mechanics.");
+  } finally {
+    setLoadingMechanics(false);
+  }
+}
+
+async function handleToggleMechanicMenu() {
+  const shouldOpenMenu = !showMechanicMenu;
+
+  setShowMechanicMenu(shouldOpenMenu);
+
+  if (shouldOpenMenu && availableMechanics.length === 0) {
+    await loadMechanics();
+  }
+}
+
+async function handleReassignMechanic(mechanicId) {
+  try {
+    setReassigningMechanic(true);
+    setError("");
+
+    const data = await apiFetch(`/services/${serviceId}`, {
+      method: "PUT",
+      body: {
+        employee_id: mechanicId,
+      },
+    });
+
+    setService(data.service || data);
+    setShowMechanicMenu(false);
+
+    await loadDetails();
+
+    if (onServiceUpdated) {
+      await onServiceUpdated();
+    }
+  } catch (error) {
+    setError(error.message || "Could not reassign mechanic.");
+  } finally {
+    setReassigningMechanic(false);
+  }
+}
+
 
   useEffect(() => {
     loadDetails();
@@ -259,44 +323,55 @@ export function ServiceDetailsModal({
                       </div>
 
                       {/* --- INICIO DEL BOTÓN AGREGADO --- */}
-                      <div className="dropdown position-relative">
-                        <button
-                          type="button"
-                          className="btn btn-light border text-secondary fw-semibold d-flex align-items-center gap-2"
-                          onClick={() => setShowMechanicMenu(!showMechanicMenu)}
-                        >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <line x1="19" y1="8" x2="19" y2="14"></line>
-                            <line x1="22" y1="11" x2="16" y2="11"></line>
-                          </svg>
-                          REASSIGN MECHANIC
-                        </button>
-                        
-                        {showMechanicMenu && (
-                          <ul 
-                            className="dropdown-menu show shadow-sm" 
-                            style={{ display: 'block', position: 'absolute', right: 0, top: '100%', zIndex: 1050 }}
+                      {isAdmin && (
+                        <div className="dropdown">
+                          <button
+                            type="button"
+                            className="btn btn-warning text-dark fw-bold btn-sm dropdown-toggle"
+                            onClick={handleToggleMechanicMenu}
+                            disabled={loadingMechanics || reassigningMechanic}
                           >
-                            {availableMechanics.length === 0 ? (
-                              <li>
-                                <span className="dropdown-item text-muted small pe-none">
-                                  You must select a mechanic
-                                </span>
-                              </li>
-                            ) : (
-                              availableMechanics.map((mech, index) => (
-                                <li key={index}>
-                                  <button className="dropdown-item" type="button">
-                                    {mech.name}
-                                  </button>
+                            {service.employee_id ? "Reassign mechanic" : "Assign mechanic"}
+                          </button>
+
+                          {showMechanicMenu && (
+                            <ul className="dropdown-menu dropdown-menu-end show shadow">
+                              {loadingMechanics ? (
+                                <li>
+                                  <span className="dropdown-item text-muted">
+                                    Loading mechanics...
+                                  </span>
                                 </li>
-                              ))
-                            )}
-                          </ul>
-                        )}
-                      </div>
+                              ) : availableMechanics.length === 0 ? (
+                                <li>
+                                  <span className="dropdown-item text-muted">
+                                    No mechanics available
+                                  </span>
+                                </li>
+                              ) : (
+                                availableMechanics.map((mechanic) => {
+                                  const isCurrentMechanic =
+                                    Number(service.employee_id) === Number(mechanic.id);
+
+                                  return (
+                                    <li key={mechanic.id}>
+                                      <button
+                                        className="dropdown-item"
+                                        type="button"
+                                        disabled={reassigningMechanic || isCurrentMechanic}
+                                        onClick={() => handleReassignMechanic(mechanic.id)}
+                                      >
+                                        {getMechanicName(mechanic)}
+                                        {isCurrentMechanic ? " (current)" : ""}
+                                      </button>
+                                    </li>
+                                  );
+                                })
+                              )}
+                            </ul>
+                          )}
+                        </div>
+                      )}
                       {/* --- FIN DEL BOTÓN AGREGADO --- */}
 
                     </div>
@@ -495,7 +570,7 @@ export function ServiceDetailsModal({
                 className="btn btn-dark"
                 onClick={onClose}
               >
-                Close
+                Done
               </button>
             </div>
           </div>

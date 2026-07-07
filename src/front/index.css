@@ -1,7 +1,4 @@
-/* =========================
-   GLOBAL
-========================= */
-
+/*GLOBAL*/
 * {
   box-sizing: border-box;
 }
@@ -18,14 +15,28 @@ body {
   background: #f5f6f7;
 }
 
-/* =========================
-   DASHBOARD LAYOUT
-========================= */
+.app-layout {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+/* DASHBOARD LAYOUT
+*/
 
 .dashboard-shell {
   width: 100%;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
   display: flex;
+  align-items: stretch;
   background-color: #f5f6f7;
   overflow: hidden;
 }
@@ -34,17 +45,16 @@ body {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  height: 100vh;
 
   padding: 32px clamp(28px, 6vw, 76px);
   background-color: #f5f6f7;
 
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .dashboard-sidebar {
   width: 320px;
-  height: 100vh;
+  align-self: stretch;
   flex-shrink: 0;
 
   background: #1f2529;
@@ -58,8 +68,6 @@ body {
   overflow: hidden;
 }
 
-/* This allows the upper part of the sidebar to scroll
-   only if it gets too tall, while the footer stays visible */
 .dashboard-sidebar > div:first-child {
   min-height: 0;
   overflow-y: auto;
@@ -79,9 +87,7 @@ body {
   border-radius: 999px;
 }
 
-/* =========================
-   SIDEBAR PROFILE
-========================= */
+/*SIDEBAR PROFILE*/
 
 .dashboard-profile {
   margin-bottom: 30px;
@@ -134,9 +140,7 @@ body {
   margin: 8px 0 0;
 }
 
-/* =========================
-   SIDEBAR BUTTONS
-========================= */
+/*SIDEBAR BUTTONS*/
 
 .dashboard-home-link,
 .dashboard-sidebar-link,
@@ -222,9 +226,7 @@ body {
   cursor: not-allowed;
 }
 
-/* =========================
-   SIDEBAR WORKSHOP INFO
-========================= */
+/* SIDEBAR WORKSHOP INFO*/
 
 .dashboard-sidebar-bottom {
   margin-top: auto;
@@ -279,9 +281,7 @@ body {
   background: rgba(255, 255, 255, 0.14);
 }
 
-/* =========================
-   ADMIN DASHBOARD
-========================= */
+/*ADMIN DASHBOARD*/
 
 .admin-dashboard-page {
   width: 100%;
@@ -322,9 +322,7 @@ body {
   overflow: hidden;
 }
 
-/* =========================
-   SERVICE TICKET PAGE
-========================= */
+/*SERVICE TICKET PAGE*/
 
 .service-ticket-page {
   width: 100%;
@@ -427,9 +425,7 @@ body {
   font-weight: 700;
 }
 
-/* =========================
-   RESPONSIVE
-========================= */
+/*RESPONSIV*/
 
 @media (max-width: 1100px) {
   .dashboard-sidebar {
@@ -448,8 +444,6 @@ body {
 
 @media (max-width: 768px) {
   .dashboard-shell {
-    height: auto;
-    min-height: 100vh;
     flex-direction: column;
     overflow: visible;
   }
@@ -472,9 +466,8 @@ body {
 
   .dashboard-main {
     height: auto;
-    min-height: 100vh;
+    min-height: auto;
     overflow: visible;
-    padding: 24px 18px;
   }
 
   .admin-dashboard-page {

@@ -23,3 +23,13 @@ with app.app_context():
 "
 
 PYTHONPATH=src pipenv run upgrade
+
+# Verify tables were created
+PYTHONPATH=src pipenv run python -c "
+from app import app
+from api.models import db
+from sqlalchemy import inspect
+with app.app_context():
+    tables = sorted(inspect(db.engine).get_table_names())
+    print('Tables in DB after migration:', tables)
+"

@@ -272,8 +272,8 @@ async function handleReassignMechanic(mechanicId) {
         onMouseDown={handleBackdropClick}
       >
         <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-          <div className="modal-content">
-            <div className="modal-header bg-warning text-dark">
+          <div className="modal-content ">
+            <div className="modal-header bg-warning text-dark p-4">
               <div>
                 <p className="mb-0 small fw-bold">
                   {isMechanic ? "My Task" : "Service Details"}
@@ -292,7 +292,7 @@ async function handleReassignMechanic(mechanicId) {
               ></button>
             </div>
 
-            <div className="modal-body">
+            <div className="modal-body m-4">
               {error && (
                 <div className="alert alert-warning" role="alert">
                   {error}

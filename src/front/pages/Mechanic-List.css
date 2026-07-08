@@ -1,0 +1,206 @@
+.app-mechanic-container {
+    --primary-orange: #ffb800; 
+    --hover-orange: #e0a100;
+    background-color: #f8f9fa;
+    font-family: system-ui, -apple-system, sans-serif;
+    min-height: calc(100vh - 56px);
+    padding-bottom: 2rem;
+}
+
+.mechanic-row {
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.mechanic-row:hover {
+    background-color: #f1f3f5;
+}
+
+.action-cell {
+    cursor: default;
+}
+
+.password-toggle-btn {
+    position: absolute;
+    right: 12px;
+    top: 36px; 
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 0;
+    font-size: 1rem;
+}
+
+.password-toggle-btn:hover {
+    color: #333;
+}
+
+.header-title {
+    color: #333333;
+    font-weight: 700;
+}
+
+.btn-yellow {
+    background-color: #ffc107;
+    color: #000000; 
+}
+
+.btn-yellow:hover {
+    background-color: #e0a100;
+    color: #ffffff;
+}
+
+.btn-save-mechanic {
+    background-color: #ffc107;
+    color: #000000; 
+    transition: background-color 0.2s ease;
+}
+
+.btn-save-mechanic:hover {
+    background-color: #e0a100;
+    color: #ffffff;
+}
+
+.btn-orange {
+    background-color: var(--primary-orange);
+    color: #000000;
+    border: none;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+
+.btn-orange:hover {
+    background-color: var(--hover-orange);
+    color: #000000;
+}
+
+.btn.btn-orange-action {
+    background-color: #ffc107;
+    color: #000000;
+    border: 1px solid #ffc107; 
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+
+.btn.btn-orange-action:hover {
+    background-color: #e0a100;
+    color: #ffffff;
+    border-color: #e0a100;
+}
+
+.pagination .page-link:hover {
+    background-color: #343a40;
+    border-color: #343a40;
+    color: #ffffff;
+}
+
+.text-muted-custom {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.table-card-wrapper {
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.mechanic-workshop-table thead th {
+    background-color: #ffffff;
+    color: #212529;
+    font-weight: 700;
+    vertical-align: middle;
+    padding: 0.3rem 0.90rem;
+}
+
+.mechanic-workshop-table tbody td {
+    padding: 1rem 0.70rem; 
+    vertical-align: middle;
+}
+
+.mechanic-workshop-table .search-row th,
+.mechanic-workshop-table .search-row td {
+    padding: 4px 8px;
+    background-color: #fdfdfd;
+}
+
+.mechanic-workshop-table .search-row input::placeholder {
+    color: #adb5bd;
+    font-size: 0.8rem;
+}
+
+.backend-dropdown {
+    z-index: 1050;
+    min-width: 240px;
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+}
+
+.style-cursor {
+    cursor: pointer;
+}
+
+.pagination .page-link:hover {
+    background-color: #343a40;
+    border-color: #343a40;
+    color: #ffffff;
+}
+
+.pagination .page-item.active .page-link {
+    background-color: var(--primary-orange);
+    border-color: var(--primary-orange);
+    color: #000000;
+    font-weight: bold;
+    
+}
+
+.pagination .page-item .page-link {
+    background-color: #343639;
+    border-color: #495057;
+    color: #ffffff;
+}
+
+.mechanic-name {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 2px;
+}
+
+.mechanic-dni {
+    font-size: 0.85rem;
+    color: #888;
+}
+
+.action-icon-btn {
+    background: transparent;
+    border: none;
+    padding: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s ease;
+}
+
+.action-icon-btn:hover {
+    transform: scale(1.1);
+}
+
+.action-edit {
+    color: var(--primary-orange);
+}
+
+.action-delete {
+    color: #dc3545;
+}
+
+.modal-subtitle {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 1.5rem;
+}
+
+.input-help-text {
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-top: 4px;
+}

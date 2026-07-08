@@ -1,0 +1,76 @@
+.hero-section {
+  height: 85vh;
+  min-height: 550px;
+  background-color: #121212;
+}
+
+.overlay-img {
+  filter: brightness(0.35);
+}
+
+.hero-content {
+  height: 100%;
+}
+
+.featured-title-wrapper {
+  background-color: #212529; 
+  padding: 8px 40px;
+  transform: skew(-20deg);
+  display: inline-block;
+  border-left: 6px solid #ffc107; 
+  border-right: 6px solid #ffc107; 
+}
+
+.featured-title {
+  transform: skew(20deg); 
+  text-transform: uppercase;
+  font-size: 1.2rem;
+  letter-spacing: 1px;
+  color: #ffffff;
+}
+
+.feature-item {
+  transition: transform 0.3s ease;
+}
+
+.feature-item:hover {
+  transform: translateY(-5px);
+}
+
+.gradient-info-section {
+  background: linear-gradient(135deg, #ffc107 0%, #212529 65%);
+}
+
+.care-support-title-wrapper {
+  background-color: #212529;
+  padding: 6px 30px;
+  transform: skew(-20deg);
+  display: inline-block;
+ border-left: 6px solid #ffc107; 
+  border-right: 6px solid #ffc107;
+}
+
+.care-support-title {
+  transform: skew(20deg);
+  font-size: 1rem;
+  color: #ffffff;
+  letter-spacing: 1px;
+}
+
+.support-number {
+  width: 45px;
+  height: 45px;
+  font-size: 1.3rem;
+  border-radius: 6px;
+  color: #ffc107
+}
+
+.mechanic-hero-img {
+  max-height: 600px;
+  width: 100%;
+  object-fit: contain;
+  object-position: bottom;
+  margin-bottom: -1rem;
+  transform: scale(1.29); 
+  transform-origin: bottom center; 
+}

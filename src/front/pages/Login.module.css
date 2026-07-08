@@ -1,40 +1,231 @@
-.loginCard {
-    max-width: 450px;
-    width: 100%;
-    border-radius: 15px;
+.loginPage {
+  background: #f4f6f8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
 }
 
-.backArrow {
-    font-size: 1.5rem;
-    border: none;
-    background: none;
+.loginRow {
+  max-width: 1200px;
+}
+
+.loginCard {
+  max-width: 465px;
+  width: 100%;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.12) !important;
+}
+
+.cardTopBar {
+  height: 8px;
+  width: 100%;
+  background: #ffc107;
+}
+
+.backButton {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: #f1f4f7;
+  color: #111827;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.backButton:hover {
+  background: #20292e;
+  color: #ffc107;
+}
+
+.loginBadge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #20292e;
+  color: #ffc107;
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 0.45rem 0.8rem;
+  letter-spacing: 0.02em;
+}
+
+.loginLogoBox {
+  max-width: 300px;
+  margin: 0 auto;
+  border-radius: 15px;
+  padding: 14px 20px;
+  
+}
+
+.loginLogo {
+  width: 100%;
+  max-height: 76px;
+  object-fit: contain;
+  display: block;
 }
 
 .titleHello {
-    font-size: 2rem;
+  font-size: 2.25rem;
+  color: #111827;
+  line-height: 1;
 }
 
-.titleWelcome {
-    font-size: 1.8rem;
+.subtitle {
+  color: #6b7280;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.inputLabel {
+  color: #20292e;
+  font-size: 0.8rem;
+  font-weight: 800;
+  margin-bottom: 0.45rem;
+  display: block;
 }
 
 .loginInput {
-    border-radius: 15px;
-    background-color: #fdfdfd;
+  min-height: 52px;
+  border-radius: 14px;
+  background-color: #f8fafc;
+  border: 1px solid #d8dee5;
+  color: #111827;
+  font-weight: 600;
+  padding: 0.85rem 1rem;
+}
+
+.loginInput::placeholder {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.loginInput:focus {
+  border-color: #ffc107;
+  background: #ffffff;
+  box-shadow: 0 0 0 0.25rem rgba(255, 193, 7, 0.22);
+}
+
+.passwordInput {
+  padding-right: 3.2rem;
 }
 
 .passwordEye {
-    cursor: pointer;
+  color: #6b7280;
+  border: none;
+  padding: 0;
+  margin-right: 1rem;
+}
+
+.passwordEye:hover {
+  color: #111827;
+}
+
+.forgotLink {
+  color: #20292e;
+  text-decoration: none;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.forgotLink:hover {
+  color: #d39e00;
+  text-decoration: underline;
 }
 
 .btnLogin {
-    border-radius: 25px;
-    background-color: #ff5a43;
-    color: white;
-    border: none; 
+  min-height: 54px;
+  border-radius: 16px;
+  background: #ffc107;
+  color: #111827;
+  border: none;
+  font-weight: 900;
+  box-shadow: 0 10px 15px rgba(163, 150, 114, 0.28);
 }
 
 .btnLogin:hover {
-    background-color: #e04f3b;
-    color: white;
+  background: #e0a800;
+  color: #111827;
+  transform: translateY(-1px);
+}
+
+.btnLogin:disabled {
+  opacity: 0.75;
+  background-color: #20292e;
+  color: #d8dee5;
+  transform: none;
+}
+
+.registerText {
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.registerLink {
+  color: #111827;
+  font-size: 0.9rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.registerLink:hover {
+  color: #d39e00;
+  text-decoration: underline;
+}
+
+.errorAlert {
+  background: #fff3cd;
+  color: #664d03;
+  border: 1px solid #ffecb5;
+  border-radius: 14px;
+  font-weight: 700;
+}
+
+@media (max-width: 480px) {
+  .loginPage {
+    padding: 1rem;
+  }
+
+  .loginCard {
+    border-radius: 20px;
+  }
+
+  .titleHello {
+    font-size: 1.9rem;
+  }
+}
+
+.successAlert {
+  background: #eaf7ee;
+  color: #146c2e;
+  border: 1px solid #b7ebc6;
+  border-radius: 14px;
+  font-weight: 700;
+}
+
+.warningAlert {
+  background: #fff8e1;
+  color: #5f4700;
+  border: 1px solid #ffe08a;
+  border-radius: 14px;
+}
+
+.devResetButton {
+  background: #20292e;
+  color: #ffc107;
+  border: none;
+  border-radius: 10px;
+  padding: 0.5rem 0.9rem;
+}
+
+.devResetButton:hover {
+  background: #111827;
+  color: #ffc107;
 }

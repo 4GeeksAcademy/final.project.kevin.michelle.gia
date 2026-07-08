@@ -5,7 +5,7 @@ import { apiFetch } from "../services/api";
 import "./Vehicle-List.css";
 
 const COLUMNS = [
-    { key: "license_plate", label: "Plate" },
+    { key: "license_plate", label: "License Plate" },
     { key: "vin", label: "VIN" },
     { key: "brand", label: "Brand" },
     { key: "model", label: "Model" },
@@ -387,7 +387,7 @@ export default function VehicleList() {
                                         </select>
                                     </div>
                                     <div className="col-md-6 mb-3">
-                                        <label className="form-label">Plate</label>
+                                        <label className="form-label">License Plate</label>
                                         <input className="form-control" name="plate" value={formState.plate} onChange={handleInputChange} required />
                                     </div>
                                     <div className="col-md-6 mb-3">

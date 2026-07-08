@@ -1720,9 +1720,7 @@ def create_service_comment(service_id):
         if service.employee_id != current_employee.id:
             return error_response("You do not have permission to comment on this service", 403)
 
-    # This route now supports both JSON and FormData.
-    # JSON is useful for old comments without images.
-    # FormData is needed when we upload an image.
+
     data = request.form if request.form else (request.get_json(silent=True) or {})
 
     comment_text = data.get("comment", "").strip()

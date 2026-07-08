@@ -24,6 +24,7 @@ app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "super-secret-key")
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=8)
 
 db_url = os.getenv("DATABASE_URL")
+print(db_url)
 if db_url is not None:
     app.config["SQLALCHEMY_DATABASE_URI"] = db_url.replace("postgres://", "postgresql://")
 else:

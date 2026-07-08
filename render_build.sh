@@ -9,4 +9,6 @@ pip install pipenv
 
 pipenv install
 
+echo $DATABASE_URL
+
 pipenv run upgrade

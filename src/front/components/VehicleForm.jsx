@@ -173,7 +173,7 @@ export const VehicleForm = ({
             <div className="card-body">
               <div className="row g-3">
                 <div className="col-md-4">
-                  <label className="form-label">Plate *</label>
+                  <label className="form-label">License Plate *</label>
                   <input
                     type="text"
                     name="plate"

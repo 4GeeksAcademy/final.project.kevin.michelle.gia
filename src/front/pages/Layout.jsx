@@ -5,10 +5,10 @@ import { Footer } from "../components/Footer";
 
 export const Layout = () => {
   return (
-    <div className="min-vh-100 d-flex flex-column">
+    <div className="app-layout">
       <Navbar />
 
-      <main className="flex-grow-1 d-flex overflow-hidden">
+      <main className="app-main">
         <Outlet />
       </main>
 

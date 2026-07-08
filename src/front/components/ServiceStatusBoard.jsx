@@ -2,9 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  Flag,
   CalendarDays,
-  Pencil,
   UserRound,
   Wrench,
 } from "lucide-react";
@@ -210,25 +208,18 @@ export function ServiceStatusBoard({ role = "admin" }) {
     }
   }
 
-  async function reportIssue(serviceId) {
-    const message = window.prompt("Describe the issue:");
-
-    if (!message || !message.trim()) return;
-
+  async function handleAssignToMe(serviceId) {
     try {
       setActionLoadingId(serviceId);
       setError("");
 
-      await apiFetch(`/services/${serviceId}/notify-admin`, {
-        method: "POST",
-        body: {
-          message: message.trim(),
-        },
+      await apiFetch(`/services/${serviceId}/assign-to-me`, {
+        method: "PATCH",
       });
 
       await fetchServices();
     } catch (error) {
-      setError(error.message);
+      setError(error.message || "Could not assign service.");
     } finally {
       setActionLoadingId(null);
     }
@@ -271,15 +262,15 @@ export function ServiceStatusBoard({ role = "admin" }) {
                     const isUpdating = actionLoadingId === service.id;
                     const vehicleInfo = getVehicleInfo(service);
                     const priority = service.priority || "normal";
+                    const isAvailable = isMechanic && !service.employee_id;
+                    const canChangeStatus = !isMechanic || !!service.employee_id;
 
                     return (
                       <article className="service-card" key={service.id}>
                         <div className="service-card-top">
                           <span
                             className={`status-pill status-${service.status}`}
-                            title={
-                              STATUS_LABELS[service.status] || service.status
-                            }
+                            title={STATUS_LABELS[service.status] || service.status}
                           >
                             <span className="pill-dot"></span>
                             <span className="pill-text">
@@ -296,6 +287,12 @@ export function ServiceStatusBoard({ role = "admin" }) {
                               {PRIORITY_LABELS[priority] || priority}
                             </span>
                           </span>
+
+                          {isAvailable && (
+                            <span className="badge bg-light text-dark border">
+                              Available
+                            </span>
+                          )}
                         </div>
 
                         <div className="service-vehicle-block">
@@ -352,7 +349,16 @@ export function ServiceStatusBoard({ role = "admin" }) {
                             View details
                           </button>
 
-                          
+                          {isAvailable && (
+                            <button
+                              type="button"
+                              className="btn btn-warning btn-sm fw-bold"
+                              disabled={isUpdating}
+                              onClick={() => handleAssignToMe(service.id)}
+                            >
+                              {isUpdating ? "Assigning..." : "Assign to me"}
+                            </button>
+                          )}
                         </div>
 
                         <div className="service-status-actions">
@@ -366,7 +372,7 @@ export function ServiceStatusBoard({ role = "admin" }) {
                                   )}`
                                 : "No previous status"
                             }
-                            disabled={!previousStatus || isUpdating}
+                            disabled={!previousStatus || isUpdating || !canChangeStatus}
                             onClick={() =>
                               updateServiceStatus(service.id, previousStatus)
                             }
@@ -384,7 +390,7 @@ export function ServiceStatusBoard({ role = "admin" }) {
                                   )}`
                                 : "Final status"
                             }
-                            disabled={!nextStatus || isUpdating}
+                            disabled={!nextStatus || isUpdating || !canChangeStatus}
                             onClick={() =>
                               updateServiceStatus(service.id, nextStatus)
                             }

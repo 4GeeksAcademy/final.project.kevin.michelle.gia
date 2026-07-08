@@ -92,7 +92,7 @@ export function ServiceDetailsForm({
             />
           </div>
 
-          <div className="col-12 col-md-4">
+          <div className="col-12 col-md-6 col-lg-4">
             <label className="form-label fw-semibold" htmlFor="service_type">
               Service type
             </label>
@@ -114,7 +114,7 @@ export function ServiceDetailsForm({
             </select>
           </div>
 
-          <div className="col-12 col-md-4">
+          <div className="col-12 col-md-6 col-lg-4">
             <label className="form-label fw-semibold" htmlFor="status">
               Initial status
             </label>
@@ -135,7 +135,7 @@ export function ServiceDetailsForm({
             </select>
           </div>
 
-          <div className="col-12 col-md-4">
+          <div className="col-12 col-md-6 col-lg-4">
             <label className="form-label fw-semibold" htmlFor="priority">
               Priority
             </label>

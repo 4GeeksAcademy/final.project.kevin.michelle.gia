@@ -9,27 +9,12 @@ pip install pipenv
 
 pipenv install
 
-# If workshops table is missing, reset alembic so migrations run fresh
 PYTHONPATH=src pipenv run python -c "
 from app import app
 from api.models import db
-from sqlalchemy import inspect, text
+from flask_migrate import stamp
 with app.app_context():
-    tables = inspect(db.engine).get_table_names()
-    if 'workshops' not in tables:
-        db.session.execute(text('DROP TABLE IF EXISTS alembic_version'))
-        db.session.commit()
-        print('Reset alembic_version — running migrations fresh')
-"
-
-PYTHONPATH=src pipenv run flask db upgrade --directory migrations
-
-# Verify tables were created
-PYTHONPATH=src pipenv run python -c "
-from app import app
-from api.models import db
-from sqlalchemy import inspect
-with app.app_context():
-    tables = sorted(inspect(db.engine).get_table_names())
-    print('Tables in DB after migration:', tables)
+    db.create_all()
+    stamp(revision='head')
+    print('Tables created and alembic stamped at head')
 "

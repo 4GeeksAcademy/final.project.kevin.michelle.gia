@@ -22,7 +22,7 @@ with app.app_context():
         print('Reset alembic_version — running migrations fresh')
 "
 
-PYTHONPATH=src pipenv run upgrade
+PYTHONPATH=src pipenv run flask db upgrade --directory migrations
 
 # Verify tables were created
 PYTHONPATH=src pipenv run python -c "

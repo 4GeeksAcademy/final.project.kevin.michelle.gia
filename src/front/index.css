@@ -98,7 +98,7 @@ body {
   color: rgba(255, 255, 255, 0.58);
   font-size: 0.78rem;
   font-weight: 600;
-  margin-bottom: 26px;
+  margin-bottom: 4px;
   background: transparent;
   padding: 0;
 }
@@ -159,7 +159,10 @@ body {
   font-size: 0.95rem;
   font-weight: 700;
   line-height: 1;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
 }
 
 .dashboard-home-link span,
@@ -229,7 +232,6 @@ body {
 /* SIDEBAR WORKSHOP INFO*/
 
 .dashboard-sidebar-bottom {
-  margin-top: auto;
   padding: 0;
   flex-shrink: 0;
 }
@@ -237,7 +239,7 @@ body {
 .dashboard-workshop-info {
   background: transparent;
   padding: 0;
-  margin-bottom: 16px;
+  margin: 16px 0;
   color: #ffffff;
 }
 

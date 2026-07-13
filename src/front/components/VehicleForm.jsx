@@ -1,7 +1,10 @@
 import { useState } from "react";
 
-const PLATE_REGEX = /^[0-9]{4}[\s-]?[A-Z]{3}$/;
+const PLATE_REGEX = /^\d{4}[BCDFGHJKLMNPRSTVWXYZ]{3}$/;
 const VIN_REGEX = /^[A-HJ-NPR-Z0-9]{17}$/;
+
+const normalizePlate = (value = "") =>
+  value.replace(/[\s-]/g, "").toUpperCase();
 
 function ButtonSpinner({ text }) {
   return (
@@ -38,7 +41,7 @@ export const VehicleForm = ({
   const [errors, setErrors] = useState({});
 
   const handleFieldChange = (event) => {
-    const { name } = event.target;
+    const { name, value, type } = event.target;
 
     if (errors[name]) {
       setErrors((currentErrors) => ({
@@ -47,7 +50,23 @@ export const VehicleForm = ({
       }));
     }
 
-    onVehicleFormChange(event);
+    let nextValue = value;
+
+    if (name === "plate") {
+      nextValue = normalizePlate(value);
+    }
+
+    if (name === "vin") {
+      nextValue = value.replace(/\s/g, "").toUpperCase();
+    }
+
+    onVehicleFormChange({
+      target: {
+        name,
+        value: nextValue,
+        type
+      }
+    });
   };
 
   const validate = () => {
@@ -57,33 +76,42 @@ export const VehicleForm = ({
       nextErrors.general = "Please select or create a customer first.";
     }
 
-    const plate = vehicleForm.plate.trim().toUpperCase();
+    const plate = normalizePlate(vehicleForm.plate || "");
 
     if (!plate) {
       nextErrors.plate = "Required";
     } else if (!PLATE_REGEX.test(plate)) {
-      nextErrors.plate = "Invalid format. Example: 1234ABC";
+      nextErrors.plate = "Invalid plate. Example: 1234ABC";
     }
 
-    const vin = vehicleForm.vin.trim().toUpperCase();
+    const vin = (vehicleForm.vin || "").trim().toUpperCase();
 
     if (vin && !VIN_REGEX.test(vin)) {
-      nextErrors.vin = "Invalid VIN. It must have 17 characters and no I/O/Q.";
+      nextErrors.vin =
+        "Invalid VIN. It must have 17 characters and no I/O/Q.";
     }
 
-    if (!vehicleForm.brand.trim()) {
+    if (!(vehicleForm.brand || "").trim()) {
       nextErrors.brand = "Required";
     }
 
-    if (!vehicleForm.model.trim()) {
+    if (!(vehicleForm.model || "").trim()) {
       nextErrors.model = "Required";
+    }
+
+    const validFuelType = fuelTypes.some(
+      (fuelType) => fuelType.value === vehicleForm.fuel_type
+    );
+
+    if (!vehicleForm.fuel_type || !validFuelType) {
+      nextErrors.fuel_type = "Select a valid fuel type";
     }
 
     const year = Number(vehicleForm.year);
     const currentYear = new Date().getFullYear();
 
     if (
-      vehicleForm.year &&
+      vehicleForm.year !== "" &&
       (Number.isNaN(year) || year < 1900 || year > currentYear + 1)
     ) {
       nextErrors.year = `Between 1900 and ${currentYear + 1}`;
@@ -91,8 +119,56 @@ export const VehicleForm = ({
 
     const mileage = Number(vehicleForm.mileage);
 
-    if (vehicleForm.mileage !== "" && (Number.isNaN(mileage) || mileage < 0)) {
-      nextErrors.mileage = "Must be a positive number";
+    if (
+      vehicleForm.mileage !== "" &&
+      (Number.isNaN(mileage) || mileage < 0)
+    ) {
+      nextErrors.mileage = "Must be zero or a positive number";
+    }
+
+    const powerHp = Number(vehicleForm.power_hp);
+
+    if (
+      vehicleForm.power_hp !== "" &&
+      (Number.isNaN(powerHp) || powerHp < 0)
+    ) {
+      nextErrors.power_hp = "Must be zero or a positive number";
+    }
+
+    const engineCc = Number(vehicleForm.engine_cc);
+
+    if (
+      vehicleForm.engine_cc !== "" &&
+      (Number.isNaN(engineCc) || engineCc < 0)
+    ) {
+      nextErrors.engine_cc = "Must be zero or a positive number";
+    }
+
+    if (vehicleForm.first_registration_date) {
+      const registrationDate = new Date(
+        `${vehicleForm.first_registration_date}T00:00:00`
+      );
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const vehicleYear = Number(vehicleForm.year);
+      const registrationYear = registrationDate.getFullYear();
+
+      if (
+        Number.isNaN(registrationDate.getTime()) ||
+        registrationDate > today
+      ) {
+        nextErrors.first_registration_date =
+          "Registration date cannot be in the future";
+      } else if (
+        vehicleForm.year !== "" &&
+        !Number.isNaN(vehicleYear) &&
+        registrationYear < vehicleYear
+      ) {
+        nextErrors.first_registration_date =
+          `Registration date cannot be earlier than the manufacturing year (${vehicleYear})`;
+      }
     }
 
     return nextErrors;
@@ -177,10 +253,9 @@ export const VehicleForm = ({
                   <input
                     type="text"
                     name="plate"
-                    className={`form-control text-uppercase ${
-                      errors.plate ? "is-invalid" : ""
-                    }`}
+                    className={`form-control text-uppercase ${errors.plate ? "is-invalid" : ""}`}
                     placeholder="1234ABC"
+                    maxLength={7}
                     value={vehicleForm.plate}
                     onChange={handleFieldChange}
                     disabled={isSavingVehicle}
@@ -195,9 +270,7 @@ export const VehicleForm = ({
                   <input
                     type="text"
                     name="vin"
-                    className={`form-control text-uppercase ${
-                      errors.vin ? "is-invalid" : ""
-                    }`}
+                    className={`form-control text-uppercase ${errors.vin ? "is-invalid" : ""}`}
                     placeholder="17 characters"
                     maxLength={17}
                     value={vehicleForm.vin}

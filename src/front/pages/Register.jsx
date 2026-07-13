@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { registerWorkshop } from "../services/api";
 import "../components/ServiceStatusBoard.css";
+import { Eye, EyeOff } from "lucide-react";
 
 const initialState = {
   company_name: "",
@@ -38,7 +39,8 @@ export const Register = () => {
   const [submitting, setSubmitting] = useState(false);
   const [serverMsg, setServerMsg] = useState("");
   const [registrationSuccess, setRegistrationSuccess] = useState(null);
-
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (event) => {
@@ -225,8 +227,8 @@ export const Register = () => {
       if (!res.ok) {
         setServerMsg(
           res.data?.error ||
-            res.data?.message ||
-            "Error creating workshop"
+          res.data?.message ||
+          "Error creating workshop"
         );
         return;
       }
@@ -268,6 +270,51 @@ export const Register = () => {
 
       {errors[name] && (
         <div className="invalid-feedback">{errors[name]}</div>
+      )}
+    </div>
+  );
+
+  const passwordField = (
+    name,
+    label,
+    isVisible,
+    setIsVisible
+  ) => (
+    <div className="mb-3">
+      <label className="form-label" htmlFor={name}>
+        {label}
+      </label>
+
+      <div className="position-relative">
+        <input
+          id={name}
+          type={isVisible ? "text" : "password"}
+          name={name}
+          value={form[name]}
+          onChange={handleChange}
+          className={`form-control pe-5 ${errors[name] ? "is-invalid" : ""
+            }`}
+          disabled={submitting}
+          autoComplete="new-password"
+        />
+
+        <button
+          type="button"
+          className="btn position-absolute top-50 end-0 translate-middle-y border-0 bg-transparent me-1"
+          onClick={() => setIsVisible((previous) => !previous)}
+          disabled={submitting}
+          aria-label={isVisible ? "Hide password" : "Show password"}
+          aria-pressed={isVisible}
+          title={isVisible ? "Hide password" : "Show password"}
+        >
+          {isVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+
+      {errors[name] && (
+        <div className="invalid-feedback d-block">
+          {errors[name]}
+        </div>
       )}
     </div>
   );
@@ -361,9 +408,8 @@ export const Register = () => {
         <div className="service-ticket-steps">
           <button
             type="button"
-            className={`service-ticket-step ${
-              currentStep === 1 ? "active" : ""
-            }`}
+            className={`service-ticket-step ${currentStep === 1 ? "active" : ""
+              }`}
             onClick={() => {
               setServerMsg("");
               setErrors({});
@@ -376,9 +422,8 @@ export const Register = () => {
 
           <button
             type="button"
-            className={`service-ticket-step ${
-              currentStep === 2 ? "active" : ""
-            }`}
+            className={`service-ticket-step ${currentStep === 2 ? "active" : ""
+              }`}
             onClick={handleStepTwoClick}
             disabled={submitting}
           >
@@ -467,12 +512,18 @@ export const Register = () => {
 
               {field("manager_email", "Login Email", "email")}
 
-              {field("manager_password", "Password", "password")}
+              {passwordField(
+                "manager_password",
+                "Password",
+                showPassword,
+                setShowPassword
+              )}
 
-              {field(
+              {passwordField(
                 "manager_password_confirm",
                 "Confirm Password",
-                "password"
+                showPasswordConfirm,
+                setShowPasswordConfirm
               )}
 
               <div className="d-flex justify-content-between align-items-center gap-3 mt-4">

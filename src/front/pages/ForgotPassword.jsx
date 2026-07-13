@@ -44,10 +44,12 @@ export const ForgotPassword = () => {
         return;
       }
 
-      setMessage(data.message || "Reset link created successfully.");
+      setMessage(data.message || "Reset token created successfully.");
 
-      if (data.reset_url) {
-        setResetUrl(data.reset_url);
+      if (data.reset_token) {
+        setResetUrl(
+          `/reset-password?token=${encodeURIComponent(data.reset_token)}`
+        );
       }
     } catch (err) {
       console.error("Forgot password error:", err);
@@ -85,7 +87,7 @@ export const ForgotPassword = () => {
             </button>
 
             <div className="mb-4">
-              
+
 
               <h2 className={`fw-bold mt-3 mb-1 ${styles.titleHello}`}>
                 Recover password

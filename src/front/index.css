@@ -45,10 +45,8 @@ body {
   flex: 1;
   min-width: 0;
   min-height: 0;
-
-  padding: 32px clamp(28px, 6vw, 76px);
+  padding: 24px;
   background-color: #f5f6f7;
-
   overflow-y: auto;
 }
 
@@ -60,7 +58,7 @@ body {
   background: #1f2529;
   color: #ffffff;
 
-  padding: 34px 28px 28px;
+  padding: 24px 24px 0 24px;
 
   display: flex;
   flex-direction: column;
@@ -98,7 +96,7 @@ body {
   color: rgba(255, 255, 255, 0.58);
   font-size: 0.78rem;
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
   background: transparent;
   padding: 0;
 }
@@ -129,7 +127,7 @@ body {
   font-size: 1.75rem;
   font-weight: 800;
   line-height: 1.1;
-  color: #ffffff;
+  color: #ffca2c;
   letter-spacing: -0.02em;
 }
 
@@ -302,7 +300,7 @@ body {
 }
 
 .admin-dashboard-header h1 {
-  font-size: clamp(2rem, 3vw, 3rem);
+  font-size: clamp(1.5rem, 3vw, 2rem);
   font-weight: 900;
   color: #20252b;
   margin: 0;
@@ -431,12 +429,15 @@ body {
 
 @media (max-width: 1100px) {
   .dashboard-sidebar {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
     width: 280px;
-    padding: 28px 20px 24px;
+    padding: 12px 20px 0 20px;
   }
 
   .dashboard-main {
-    padding: 28px 24px;
+    padding: 20px 16px;
   }
 
   .admin-board-card {

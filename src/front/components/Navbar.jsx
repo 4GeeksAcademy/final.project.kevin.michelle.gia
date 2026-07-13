@@ -24,7 +24,7 @@ export const Navbar = () => {
   };
 
   return (
-    <nav className="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-warning">
+    <nav className="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-warning p-0">
       <div className="container-fluid px-4">
         <Link className="navbar-brand d-flex align-items-center" to="/">
           <img

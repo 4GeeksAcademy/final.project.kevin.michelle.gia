@@ -15,47 +15,47 @@ export const Login = () => {
   const navigate = useNavigate();
 
   const handleLogin = async (event) => {
-  event.preventDefault();
+    event.preventDefault();
 
-  setError(null);
-  setLoading(true);
+    setError(null);
+    setLoading(true);
 
-  try {
-    const res = await loginUser(email.trim(), password);
+    try {
+      const res = await loginUser(email.trim(), password);
 
-    if (!res.ok) {
-      setError(
-        res.data?.error ||
-        res.data?.message ||
-        "Login failed. Please try again."
-      );
-      return;
+      if (!res.ok) {
+        setError(
+          res.data?.error ||
+          res.data?.message ||
+          "Login failed. Please try again."
+        );
+        return;
+      }
+
+      const data = res.data;
+
+      if (!data.token || !data.user || !data.employee) {
+        setError("Login response is missing token, user or employee data.");
+        console.log("Login response:", data);
+        return;
+      }
+
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("employee", JSON.stringify(data.employee));
+
+      if (data.workshop) {
+        localStorage.setItem("workshop", JSON.stringify(data.workshop));
+      }
+
+      navigate("/dashboard");
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("Failed to connect to the server.");
+    } finally {
+      setLoading(false);
     }
-
-    const data = res.data;
-
-    if (!data.token || !data.user || !data.employee) {
-      setError("Login response is missing token, user or employee data.");
-      console.log("Login response:", data);
-      return;
-    }
-
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    localStorage.setItem("employee", JSON.stringify(data.employee));
-
-    if (data.workshop) {
-      localStorage.setItem("workshop", JSON.stringify(data.workshop));
-    }
-
-    navigate("/dashboard");
-  } catch (err) {
-    console.error("Login error:", err);
-    setError("Failed to connect to the server.");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <div className={`container-fluid min-vh-100 ${styles.loginPage}`}>
@@ -76,7 +76,7 @@ export const Login = () => {
             <div className="mb-4 text-center">
 
               <div className={styles.loginLogoBox}>
-                <img src={little_logo} alt="Workshop Manager simple logo" className={styles.loginLogo}/>
+                <img src={little_logo} alt="Workshop Manager simple logo" className={styles.loginLogo} />
               </div>
 
               <h2 className={`fw-bold mt-4 mb-1 ${styles.titleHello}`}>
@@ -138,14 +138,14 @@ export const Login = () => {
                     aria-label="Show or hide password"
                   >
                     <i
-                      className={`fa-solid ${
-                        showPassword ? "fa-eye" : "fa-eye-slash"
-                      }`}
+                      className={`fa-solid ${showPassword ? "fa-eye" : "fa-eye-slash"
+                        }`}
                     ></i>
                   </button>
                 </div>
               </div>
 
+              {/* TODO: Add Forgot Password
               <div className="text-end mb-4">
                 <Link
                   to="/forgot-password"
@@ -154,10 +154,11 @@ export const Login = () => {
                   Forgot your password?
                 </Link>
               </div>
+              */}
 
               <button
                 type="submit"
-                className={`btn w-100 fw-bold ${styles.btnLogin}`}
+                className={`btn w-100 fw-bold mt-5 ${styles.btnLogin}`}
                 disabled={loading}
               >
                 {loading ? (

@@ -230,7 +230,6 @@ body {
 /* SIDEBAR WORKSHOP INFO*/
 
 .dashboard-sidebar-bottom {
-  margin-top: auto;
   padding: 0;
   flex-shrink: 0;
 }
@@ -238,7 +237,7 @@ body {
 .dashboard-workshop-info {
   background: transparent;
   padding: 0;
-  margin-bottom: 16px;
+  margin: 16px 0;
   color: #ffffff;
 }
 

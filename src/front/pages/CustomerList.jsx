@@ -4,6 +4,9 @@ import * as XLSX from "xlsx";
 import "./CustomerList.css";
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:3001";
+const PHONE_REGEX = /^\+?[0-9\s()-]{7,20}$/;
+const DNI_REGEX = /^\d{8}[A-Z]$/;
+const NIE_REGEX = /^[XYZ]\d{7}[A-Z]$/;
 
 const INITIAL_FILTERS = {
     full_name: "",
@@ -80,6 +83,7 @@ export default function CustomerList() {
     const [newCustomer, setNewCustomer] = useState(initialFormState);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [formErrors, setFormErrors] = useState({});
 
     const fetchCustomers = async () => {
         setLoading(true);
@@ -215,7 +219,7 @@ export default function CustomerList() {
 
     const handleSelectAll = (event) => {
         if (event.target.checked) {
-            const allSelected = { ...selectedRows }; 
+            const allSelected = { ...selectedRows };
             paginatedData.forEach((row) => {
                 allSelected[row.id] = true;
             });
@@ -239,13 +243,58 @@ export default function CustomerList() {
     const handleInputChange = (event) => {
         const { name, value } = event.target;
 
-        setNewCustomer((prev) => ({
-            ...prev,
-            [name]: value
+        if (formErrors[name]) {
+            setFormErrors((currentErrors) => ({
+                ...currentErrors,
+                [name]: undefined
+            }));
+        }
+
+        let nextValue = value;
+
+        if (name === "dni") {
+            nextValue = value
+                .replace(/[\s-]/g, "")
+                .toUpperCase();
+        }
+
+        setNewCustomer((currentCustomer) => ({
+            ...currentCustomer,
+            [name]: nextValue
         }));
     };
 
+    const validateCustomer = () => {
+        const nextErrors = {};
+
+        const firstName = (newCustomer.first_name || "").trim();
+        const lastName = (newCustomer.last_name || "").trim();
+        const phone = (newCustomer.phone || "").trim();
+        const dni = (newCustomer.dni || "").replace(/[\s-]/g, "").toUpperCase();
+
+        if (!firstName) {
+            nextErrors.first_name = "Required";
+        }
+
+        if (!lastName) {
+            nextErrors.last_name = "Required";
+        }
+
+        if (!phone) {
+            nextErrors.phone = "Required";
+        } else if (!PHONE_REGEX.test(phone)) {
+            nextErrors.phone = "Invalid phone number";
+        }
+
+        if (dni && !DNI_REGEX.test(dni) && !NIE_REGEX.test(dni)) {
+            nextErrors.dni =
+                "Invalid DNI or NIE. Example: 12345678Z or X1234567L";
+        }
+
+        return nextErrors;
+    };
     const handleOpenEditModal = (customer) => {
+        setFormErrors({});
         setEditingCustomer(customer);
         setNewCustomer({
             first_name: customer.first_name || "",
@@ -260,6 +309,7 @@ export default function CustomerList() {
     };
 
     const handleCloseModal = () => {
+        setFormErrors({});
         setShowAddModal(false);
         setEditingCustomer(null);
         setNewCustomer(initialFormState);
@@ -267,23 +317,20 @@ export default function CustomerList() {
 
     const handleSaveCustomer = async (event) => {
         event.preventDefault();
+        const validationErrors = validateCustomer();
 
-        if (
-            !newCustomer.first_name.trim() ||
-            !newCustomer.last_name.trim() ||
-            !newCustomer.dni.trim() ||
-            !newCustomer.driving_license.trim() ||
-            !newCustomer.phone.trim()
-        ) {
-            alert("Please fill first name, last name, DNI, driving license and phone.");
+        if (Object.keys(validationErrors).length > 0) {
+            setFormErrors(validationErrors);
             return;
         }
+
+        setFormErrors({});
 
         try {
             const token = getToken();
             const isEditing = !!editingCustomer;
             const method = isEditing ? "PUT" : "POST";
-            const url = isEditing 
+            const url = isEditing
                 ? `${API_URL}/api/customers/${editingCustomer.id}`
                 : `${API_URL}/api/customers`;
 
@@ -338,7 +385,7 @@ export default function CustomerList() {
             }
 
             setData((prevData) => prevData.filter((row) => String(row.id) !== String(id)));
-            
+
             if (selectedRows[id]) {
                 setSelectedRows((prev) => {
                     const updated = { ...prev };
@@ -389,6 +436,7 @@ export default function CustomerList() {
                     <div className="col-md-2">
                         <button
                             onClick={() => {
+                                setFormErrors({});
                                 setEditingCustomer(null);
                                 setNewCustomer(initialFormState);
                                 setShowAddModal(true);
@@ -620,7 +668,7 @@ export default function CustomerList() {
                                             />
                                         </td>
                                     )}
-                                    
+
                                     {visibleColumns.actions && <td></td>}
                                 </tr>
                             </thead>
@@ -670,19 +718,19 @@ export default function CustomerList() {
 
                                             {visibleColumns.email && <td>{row.email || "-"}</td>}
                                             {visibleColumns.address && <td>{row.address || "-"}</td>}
-                                            
+
                                             {visibleColumns.actions && (
                                                 <td className="text-center">
                                                     <div className="d-flex justify-content-center align-items-center gap-2">
-                                                        <button 
-                                                            className="action-icon-btn action-edit" 
+                                                        <button
+                                                            className="action-icon-btn action-edit"
                                                             onClick={() => handleOpenEditModal(row)}
                                                             title="Edit customer"
                                                         >
                                                             <Pencil size={18} fill="currentColor" />
                                                         </button>
-                                                        <button 
-                                                            className="action-icon-btn action-delete" 
+                                                        <button
+                                                            className="action-icon-btn action-delete"
                                                             onClick={() => handleDeleteCustomer(row.id)}
                                                             title="Deactivate customer"
                                                         >
@@ -714,9 +762,9 @@ export default function CustomerList() {
                             {filteredData.length === 0
                                 ? "Showing 0 of 0 entries"
                                 : `Showing ${(currentPage - 1) * recordsPerPage + 1} of ${Math.min(
-                                      currentPage * recordsPerPage,
-                                      filteredData.length
-                                  )} entries`}
+                                    currentPage * recordsPerPage,
+                                    filteredData.length
+                                )} entries`}
                         </div>
 
                         <nav>
@@ -785,7 +833,7 @@ export default function CustomerList() {
                                     ></button>
                                 </div>
 
-                                <form onSubmit={handleSaveCustomer}>
+                                <form onSubmit={handleSaveCustomer} noValidate>
                                     <div className="modal-body p-4">
                                         <div className="row">
                                             <div className="col-md-6 mb-3">
@@ -793,11 +841,15 @@ export default function CustomerList() {
                                                 <input
                                                     type="text"
                                                     name="first_name"
-                                                    className="form-control"
+                                                    className={`form-control ${formErrors.first_name ? "is-invalid" : ""}`}
                                                     value={newCustomer.first_name}
                                                     onChange={handleInputChange}
-                                                    required
                                                 />
+                                                {formErrors.first_name && (
+                                                    <div className="invalid-feedback">
+                                                        {formErrors.first_name}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <div className="col-md-6 mb-3">
@@ -805,25 +857,38 @@ export default function CustomerList() {
                                                 <input
                                                     type="text"
                                                     name="last_name"
-                                                    className="form-control"
+                                                    className={`form-control ${formErrors.last_name ? "is-invalid" : ""}`}
                                                     value={newCustomer.last_name}
                                                     onChange={handleInputChange}
-                                                    required
+
                                                 />
+                                                {formErrors.last_name && (
+                                                    <div className="invalid-feedback">
+                                                        {formErrors.last_name}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
                                         <div className="row">
                                             <div className="col-md-6 mb-3">
-                                                <label className="form-label fw-semibold">DNI</label>
+                                                <label className="form-label fw-semibold">DNI / NIE</label>
                                                 <input
                                                     type="text"
                                                     name="dni"
-                                                    className="form-control"
+                                                    className={`form-control text-uppercase ${formErrors.dni ? "is-invalid" : ""
+                                                        }`}
+                                                    placeholder="12345678Z or X1234567L"
+                                                    maxLength={9}
                                                     value={newCustomer.dni}
                                                     onChange={handleInputChange}
-                                                    required
                                                 />
+
+                                                {formErrors.dni && (
+                                                    <div className="invalid-feedback">
+                                                        {formErrors.dni}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <div className="col-md-6 mb-3">
@@ -836,7 +901,7 @@ export default function CustomerList() {
                                                     className="form-control"
                                                     value={newCustomer.driving_license}
                                                     onChange={handleInputChange}
-                                                    required
+
                                                 />
                                             </div>
                                         </div>
@@ -844,13 +909,19 @@ export default function CustomerList() {
                                         <div className="mb-3">
                                             <label className="form-label fw-semibold">Phone</label>
                                             <input
-                                                type="text"
+                                                type="tel"
                                                 name="phone"
-                                                className="form-control"
+                                                className={`form-control ${formErrors.phone ? "is-invalid" : ""
+                                                    }`}
                                                 value={newCustomer.phone}
                                                 onChange={handleInputChange}
-                                                required
                                             />
+
+                                            {formErrors.phone && (
+                                                <div className="invalid-feedback">
+                                                    {formErrors.phone}
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="mb-3">

@@ -3,10 +3,23 @@ import {
     Wrench, Search, Plus, Copy, FileSpreadsheet, FileText,
     TableProperties, Eye, FilterX, Menu, Pencil, Trash2,
     MapPin, Briefcase
-} from "lucide-react";
+}
+    from "lucide-react";
 import * as XLSX from "xlsx"
 import { apiFetch } from "../services/api"
 import "./Mechanic-List.css";
+
+const DNI_NIE_REGEX = /^(?:\d{8}[A-Z]|[XYZ]\d{7}[A-Z])$/;
+const PHONE_REGEX = /^(?:\+34)?[6789]\d{8}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const NAME_REGEX = /^[\p{L}]+(?:[\s'-][\p{L}]+)*$/u;
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+
+const normalizeDni = (value = "") =>
+    value.replace(/[\s-]/g, "").toUpperCase();
+
+const normalizePhone = (value = "") =>
+    value.replace(/[\s()-]/g, "").replace(/^0034/, "+34");
 
 const INITIAL_FILTERS = {
     name: "",
@@ -69,7 +82,7 @@ export default function MechanicList() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
-
+    const [formErrors, setFormErrors] = useState({});
     useEffect(() => {
         loadMechanics();
     }, []);
@@ -108,7 +121,14 @@ export default function MechanicList() {
     const handleToggleColumn = (column) => {
         setVisibleColumns((prev) => ({ ...prev, [column]: !prev[column] }));
     };
+    const handleColumnFilterChange = (column, value) => {
+        setColumnFilters((prev) => ({
+            ...prev,
+            [column]: value
+        }));
 
+        setCurrentPage(1);
+    };
     const handleClearFilters = () => {
         setGlobalSearch("");
         setColumnFilters(INITIAL_FILTERS);
@@ -208,6 +228,7 @@ export default function MechanicList() {
     };
 
     const handleCloseModal = () => {
+        setFormErrors({});
         setShowModal(false);
         setMechanicForm(initialFormState);
         setIsEditing(false);
@@ -220,12 +241,15 @@ export default function MechanicList() {
     };
 
     const handleOpenAddModal = () => {
+        setFormErrors({});
         setMechanicForm(initialFormState);
         setIsEditing(false);
         setShowModal(true);
     };
 
     const handleOpenEditModal = (mechanic) => {
+        setFormErrors({});
+
         setMechanicForm({
             id: mechanic.id,
             first_name: mechanic.first_name,
@@ -238,6 +262,7 @@ export default function MechanicList() {
             temporary_password: "",
             confirm_password: ""
         });
+
         setIsEditing(true);
         setSelectedMechanic(null);
         setShowModal(true);
@@ -255,22 +280,44 @@ export default function MechanicList() {
 
     const handleInputChange = (event) => {
         const { name, value } = event.target;
-        setMechanicForm((prev) => ({ ...prev, [name]: value }));
+
+        let nextValue = value;
+
+        if (name === "dni") {
+            nextValue = normalizeDni(value);
+        }
+
+        if (name === "phone") {
+            nextValue = normalizePhone(value);
+        }
+
+        if (name === "email") {
+            nextValue = value.trimStart().toLowerCase();
+        }
+
+        setMechanicForm((prev) => ({
+            ...prev,
+            [name]: nextValue
+        }));
+
+        if (formErrors[name]) {
+            setFormErrors((prev) => ({
+                ...prev,
+                [name]: undefined
+            }));
+        }
     };
 
     const handleSaveMechanic = async (event) => {
         event.preventDefault();
+        const validationErrors = validateMechanic();
 
-        if (!mechanicForm.first_name || !mechanicForm.last_name || !mechanicForm.dni || !mechanicForm.email) {
-            alert("Please fill out all required fields.");
+        if (Object.keys(validationErrors).length > 0) {
+            setFormErrors(validationErrors);
             return;
         }
 
-        if (!isEditing && (!mechanicForm.temporary_password || mechanicForm.temporary_password !== mechanicForm.confirm_password)) {
-            alert("Passwords do not match.");
-            return;
-        }
-
+        setFormErrors({});
         setSaving(true);
         setError("");
 
@@ -281,8 +328,8 @@ export default function MechanicList() {
                     body: {
                         first_name: mechanicForm.first_name.trim(),
                         last_name: mechanicForm.last_name.trim(),
-                        dni: mechanicForm.dni.trim(),
-                        phone: mechanicForm.phone.trim(),
+                        dni: normalizeDni(mechanicForm.dni),
+                        phone: normalizePhone(mechanicForm.phone),
                         address: mechanicForm.address.trim(),
                         specialty: mechanicForm.specialty.trim()
                     }
@@ -295,13 +342,14 @@ export default function MechanicList() {
                     body: {
                         first_name: mechanicForm.first_name.trim(),
                         last_name: mechanicForm.last_name.trim(),
-                        dni: mechanicForm.dni.trim(),
-                        phone: mechanicForm.phone.trim(),
-                        email: mechanicForm.email.trim(),
+                        dni: normalizeDni(mechanicForm.dni),
+                        phone: normalizePhone(mechanicForm.phone),
+                        email: mechanicForm.email.trim().toLowerCase(),
                         address: mechanicForm.address.trim(),
                         specialty: mechanicForm.specialty.trim(),
                         password: mechanicForm.temporary_password,
                         password_confirm: mechanicForm.confirm_password
+
                     }
                 });
                 const created = normalizeMechanic(result.employee || result.mechanic || { ...mechanicForm, id: Date.now(), is_active: true });
@@ -327,6 +375,70 @@ export default function MechanicList() {
         } catch (err) {
             setError(err.message || "Could not delete mechanic.");
         }
+    };
+
+    const validateMechanic = () => {
+        const nextErrors = {};
+
+        const firstName = mechanicForm.first_name.trim();
+        const lastName = mechanicForm.last_name.trim();
+        const dni = normalizeDni(mechanicForm.dni);
+        const phone = normalizePhone(mechanicForm.phone);
+        const email = mechanicForm.email.trim().toLowerCase();
+
+        if (!firstName) {
+            nextErrors.first_name = "First name is required";
+        } else if (!NAME_REGEX.test(firstName)) {
+            nextErrors.first_name =
+                "Use only letters, spaces, apostrophes or hyphens";
+        }
+
+        if (!lastName) {
+            nextErrors.last_name = "Last name is required";
+        } else if (!NAME_REGEX.test(lastName)) {
+            nextErrors.last_name =
+                "Use only letters, spaces, apostrophes or hyphens";
+        }
+
+        if (!dni) {
+            nextErrors.dni = "DNI or NIE is required";
+        } else if (!DNI_NIE_REGEX.test(dni)) {
+            nextErrors.dni =
+                "Invalid format. Examples: 12345678A or X1234567A";
+        }
+
+        if (phone && !PHONE_REGEX.test(phone)) {
+            nextErrors.phone =
+                "Enter a valid Spanish phone number";
+        }
+
+        if (!email) {
+            nextErrors.email = "Email is required";
+        } else if (!EMAIL_REGEX.test(email)) {
+            nextErrors.email = "Enter a valid email address";
+        }
+
+        if (!isEditing) {
+            if (!mechanicForm.temporary_password) {
+                nextErrors.temporary_password = "Password is required";
+            } else if (
+                !PASSWORD_REGEX.test(mechanicForm.temporary_password)
+            ) {
+                nextErrors.temporary_password =
+                    "Minimum 8 characters, including uppercase, lowercase and number";
+            }
+
+            if (!mechanicForm.confirm_password) {
+                nextErrors.confirm_password = "Confirm the password";
+            } else if (
+                mechanicForm.temporary_password !==
+                mechanicForm.confirm_password
+            ) {
+                nextErrors.confirm_password = "Passwords do not match";
+            }
+        }
+
+        return nextErrors;
     };
 
     return (
@@ -466,10 +578,10 @@ export default function MechanicList() {
                         <ul className="pagination pagination-sm m-0">
                             <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
                                 <button className="page-link"
-                                        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                                        disabled={currentPage === 1}>Previous</button>
+                                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}>Previous</button>
                             </li>
-                            
+
                             {[...Array(totalPages)].map((_, index) => (
                                 <li key={index} className={`page-item ${currentPage === index + 1 ? "active" : ""}`}>
                                     <button className="page-link" onClick={() => setCurrentPage(index + 1)}>
@@ -477,13 +589,13 @@ export default function MechanicList() {
                                     </button>
                                 </li>
                             ))}
-                            
+
                             <li className={`page-item ${currentPage >= totalPages ? "disabled" : ""}`}>
                                 <button className="page-link"
-                                        onClick={() =>
-                                            setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                                        }
-                                        disabled={currentPage === totalPages}>Next</button>
+                                    onClick={() =>
+                                        setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                                    }
+                                    disabled={currentPage === totalPages}>Next</button>
                             </li>
                         </ul>
                     </nav>
@@ -570,7 +682,7 @@ export default function MechanicList() {
                                     <button type="button" className="btn-close text-dark" onClick={handleCloseModal}></button>
                                 </div>
 
-                                <form onSubmit={handleSaveMechanic}>
+                                <form onSubmit={handleSaveMechanic} noValidate>
                                     <div className="modal-body p-4">
                                         {!isEditing && (
                                             <div className="modal-subtitle">
@@ -580,40 +692,139 @@ export default function MechanicList() {
 
                                         <div className="row mb-3">
                                             <div className="col-md-6">
-                                                <label className="form-label fw-semibold mb-1">First name</label>
-                                                <input type="text" name="first_name" className="form-control" value={mechanicForm.first_name} onChange={handleInputChange} required />
+                                                <label className="form-label fw-semibold mb-1">
+                                                    First name
+                                                </label>
+
+                                                <input
+                                                    type="text"
+                                                    name="first_name"
+                                                    className={`form-control ${formErrors.first_name ? "is-invalid" : ""
+                                                        }`}
+                                                    value={mechanicForm.first_name}
+                                                    onChange={handleInputChange}
+                                                    disabled={saving}
+                                                />
+
+                                                {formErrors.first_name && (
+                                                    <div className="invalid-feedback">
+                                                        {formErrors.first_name}
+                                                    </div>
+                                                )}
                                             </div>
+
                                             <div className="col-md-6">
-                                                <label className="form-label fw-semibold mb-1">Last name</label>
-                                                <input type="text" name="last_name" className="form-control" value={mechanicForm.last_name} onChange={handleInputChange} required />
+                                                <label className="form-label fw-semibold mb-1">
+                                                    Last name
+                                                </label>
+
+                                                <input
+                                                    type="text"
+                                                    name="last_name"
+                                                    className={`form-control ${formErrors.last_name ? "is-invalid" : ""
+                                                        }`}
+                                                    value={mechanicForm.last_name}
+                                                    onChange={handleInputChange}
+                                                    disabled={saving}
+                                                />
+
+                                                {formErrors.last_name && (
+                                                    <div className="invalid-feedback">
+                                                        {formErrors.last_name}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
                                         <div className="mb-3">
-                                            <label className="form-label fw-semibold mb-1">DNI / NIE</label>
-                                            <input type="text" name="dni" className="form-control" value={mechanicForm.dni} onChange={handleInputChange} required />
+                                            <label className="form-label fw-semibold mb-1">
+                                                DNI / NIE
+                                            </label>
+
+                                            <input
+                                                type="text"
+                                                name="dni"
+                                                className={`form-control text-uppercase ${formErrors.dni ? "is-invalid" : ""
+                                                    }`}
+                                                value={mechanicForm.dni}
+                                                onChange={handleInputChange}
+                                                placeholder="12345678A or X1234567A"
+                                                maxLength={9}
+                                                disabled={saving}
+                                            />
+
+                                            {formErrors.dni && (
+                                                <div className="invalid-feedback">
+                                                    {formErrors.dni}
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="mb-3">
-                                            <label className="form-label fw-semibold mb-1">Phone</label>
-                                            <input type="text" name="phone" className="form-control" value={mechanicForm.phone} onChange={handleInputChange} />
+                                            <label className="form-label fw-semibold mb-1">
+                                                Phone
+                                            </label>
+
+                                            <input
+                                                type="tel"
+                                                name="phone"
+                                                className={`form-control ${formErrors.phone ? "is-invalid" : ""
+                                                    }`}
+                                                value={mechanicForm.phone}
+                                                onChange={handleInputChange}
+                                                placeholder="+34612345678"
+                                                disabled={saving}
+                                            />
+
+                                            {formErrors.phone && (
+                                                <div className="invalid-feedback">
+                                                    {formErrors.phone}
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="mb-3">
-                                            <label className="form-label fw-semibold mb-1">Email</label>
-                                            <input type="email" name="email" className="form-control" value={mechanicForm.email} onChange={handleInputChange} required />
-                                            <div className="input-help-text">This is the email the mechanic will use to log in.</div>
+                                            <label className="form-label fw-semibold mb-1">
+                                                Email
+                                            </label>
+
+                                            <input
+                                                type="email"
+                                                name="email"
+                                                className={`form-control ${formErrors.email ? "is-invalid" : ""
+                                                    }`}
+                                                value={mechanicForm.email}
+                                                onChange={handleInputChange}
+                                                disabled={isEditing || saving}
+                                            />
+
+                                            {formErrors.email && (
+                                                <div className="invalid-feedback">
+                                                    {formErrors.email}
+                                                </div>
+                                            )}
+
+                                            <div className="input-help-text">
+                                                This is the email the mechanic will use to log in.
+                                            </div>
                                         </div>
 
                                         {isEditing && (
                                             <>
                                                 <div className="mb-3">
                                                     <label className="form-label fw-semibold mb-1">Address</label>
-                                                    <input type="text" name="address" className="form-control" value={mechanicForm.address} onChange={handleInputChange} />
+                                                    <input
+                                                        type="text"
+                                                        name="address"
+                                                        className="form-control"
+                                                        value={mechanicForm.address}
+                                                        onChange={handleInputChange}
+                                                        disabled={saving}
+                                                    />
                                                 </div>
                                                 <div className="mb-3">
                                                     <label className="form-label fw-semibold mb-1">Specialty</label>
-                                                    <input type="text" name="specialty" className="form-control" value={mechanicForm.specialty} onChange={handleInputChange} placeholder="e.g. Engine Repair, Electrician" />
+                                                    <input type="text" name="specialty" className="form-control" value={mechanicForm.specialty} onChange={handleInputChange} placeholder="e.g. Engine Repair, Electrician" disabled={saving} />
                                                 </div>
                                             </>
                                         )}
@@ -621,41 +832,73 @@ export default function MechanicList() {
                                         {!isEditing && (
                                             <>
                                                 <div className="mb-3 position-relative">
-                                                    <label className="form-label fw-semibold mb-1">Temporary password</label>
+                                                    <label className="form-label fw-semibold mb-1">
+                                                        Temporary password
+                                                    </label>
+
                                                     <input
                                                         type={showPassword ? "text" : "password"}
                                                         name="temporary_password"
-                                                        className="form-control pe-5"
+                                                        className={`form-control pe-5 ${formErrors.temporary_password ? "is-invalid" : ""
+                                                            }`}
                                                         value={mechanicForm.temporary_password}
                                                         onChange={handleInputChange}
-                                                        required
+                                                        disabled={saving}
                                                     />
+
                                                     <button
                                                         type="button"
                                                         className="password-toggle-btn"
                                                         onClick={() => setShowPassword(!showPassword)}
+                                                        disabled={saving}
                                                     >
-                                                        <i className={`fa-solid ${showPassword ? "fa-eye" : "fa-eye-slash"}`}></i>
+                                                        <i
+                                                            className={`fa-solid ${showPassword ? "fa-eye" : "fa-eye-slash"
+                                                                }`}
+                                                        ></i>
                                                     </button>
+
+                                                    {formErrors.temporary_password && (
+                                                        <div className="invalid-feedback">
+                                                            {formErrors.temporary_password}
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <div className="mb-3 position-relative">
-                                                    <label className="form-label fw-semibold mb-1">Confirm password</label>
+                                                    <label className="form-label fw-semibold mb-1">
+                                                        Confirm password
+                                                    </label>
+
                                                     <input
                                                         type={showConfirmPassword ? "text" : "password"}
                                                         name="confirm_password"
-                                                        className="form-control pe-5"
+                                                        className={`form-control pe-5 ${formErrors.confirm_password ? "is-invalid" : ""
+                                                            }`}
                                                         value={mechanicForm.confirm_password}
                                                         onChange={handleInputChange}
-                                                        required
+                                                        disabled={saving}
                                                     />
+
                                                     <button
                                                         type="button"
                                                         className="password-toggle-btn"
-                                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                        onClick={() =>
+                                                            setShowConfirmPassword(!showConfirmPassword)
+                                                        }
+                                                        disabled={saving}
                                                     >
-                                                        <i className={`fa-solid ${showConfirmPassword ? "fa-eye" : "fa-eye-slash"}`}></i>
+                                                        <i
+                                                            className={`fa-solid ${showConfirmPassword ? "fa-eye" : "fa-eye-slash"
+                                                                }`}
+                                                        ></i>
                                                     </button>
+
+                                                    {formErrors.confirm_password && (
+                                                        <div className="invalid-feedback">
+                                                            {formErrors.confirm_password}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </>
                                         )}

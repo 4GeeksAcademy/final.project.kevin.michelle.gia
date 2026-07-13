@@ -1,3 +1,9 @@
+import { useState } from "react";
+
+const PHONE_REGEX = /^\+?[0-9\s()-]{7,20}$/;
+const DNI_REGEX = /^\d{8}[A-Z]$/;
+const NIE_REGEX = /^[XYZ]\d{7}[A-Z]$/;
+
 function ButtonSpinner({ text }) {
   return (
     <>
@@ -25,6 +31,79 @@ export function CustomerForm({
   onContinue,
   getCustomerLabel
 }) {
+
+  const [errors, setErrors] = useState({});
+
+  const handleFieldChange = (event) => {
+    const { name, value, type } = event.target;
+
+    if (errors[name]) {
+      setErrors((currentErrors) => ({
+        ...currentErrors,
+        [name]: undefined
+      }));
+    }
+
+    let nextValue = value;
+
+    if (name === "dni") {
+      nextValue = value
+        .replace(/[\s-]/g, "")
+        .toUpperCase();
+    }
+
+    onCustomerFormChange({
+      target: {
+        name,
+        value: nextValue,
+        type
+      }
+    });
+  };
+
+  const validate = () => {
+    const nextErrors = {};
+
+    const firstName = (customerForm.first_name || "").trim();
+    const lastName = (customerForm.last_name || "").trim();
+    const phone = (customerForm.phone || "").trim();
+    const dni = (customerForm.dni || "").replace(/[\s-]/g, "").toUpperCase();
+
+
+    if (!firstName) {
+      nextErrors.first_name = "Required";
+    }
+
+    if (!lastName) {
+      nextErrors.last_name = "Required";
+    }
+
+    if (!phone) {
+      nextErrors.phone = "Required";
+    } else if (!PHONE_REGEX.test(phone)) {
+      nextErrors.phone = "Invalid phone number";
+    }
+    if (dni && !DNI_REGEX.test(dni) && !NIE_REGEX.test(dni)) {
+      nextErrors.dni =
+        "Invalid DNI or NIE. Example: 12345678Z or X1234567L";
+    }
+    return nextErrors;
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    const validationErrors = validate();
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
+    setErrors({});
+    onCreateCustomer(event);
+  };
+
   return (
     <section>
       <h3 className="h5 fw-bold mb-3">Customer</h3>
@@ -67,7 +146,7 @@ export function CustomerForm({
       </button>
 
       {showCustomerForm && (
-        <form onSubmit={onCreateCustomer} className="border rounded-4 bg-light p-3">
+        <form onSubmit={handleSubmit} noValidate className="border rounded-4 bg-light p-3">
           <div className="row g-3">
             <div className="col-12 col-md-6">
               <label className="form-label fw-semibold" htmlFor="customer_first_name">
@@ -78,12 +157,16 @@ export function CustomerForm({
                 id="customer_first_name"
                 type="text"
                 name="first_name"
-                className="form-control py-2 px-3"
+                className={`form-control py-2 px-3 ${errors.first_name ? "is-invalid" : ""}`}
                 value={customerForm.first_name}
-                onChange={onCustomerFormChange}
-                required
+                onChange={handleFieldChange}
                 disabled={isSavingCustomer}
               />
+              {errors.first_name && (
+                <div className="invalid-feedback">
+                  {errors.first_name}
+                </div>
+              )}
             </div>
 
             <div className="col-12 col-md-6">
@@ -95,12 +178,16 @@ export function CustomerForm({
                 id="customer_last_name"
                 type="text"
                 name="last_name"
-                className="form-control py-2 px-3"
+                className={`form-control py-2 px-3 ${errors.last_name ? "is-invalid" : ""}`}
                 value={customerForm.last_name}
-                onChange={onCustomerFormChange}
-                required
+                onChange={handleFieldChange}
                 disabled={isSavingCustomer}
               />
+              {errors.last_name && (
+                <div className="invalid-feedback">
+                  {errors.last_name}
+                </div>
+              )}
             </div>
 
             <div className="col-12 col-md-6">
@@ -112,12 +199,18 @@ export function CustomerForm({
                 id="customer_dni"
                 type="text"
                 name="dni"
-                className="form-control py-2 px-3"
+                className={`form-control py-2 px-3 text-uppercase ${errors.dni ? "is-invalid" : ""}`}
+                placeholder="12345678Z or X1234567L"
+                maxLength={9}
                 value={customerForm.dni}
-                onChange={onCustomerFormChange}
-                required
+                onChange={handleFieldChange}
                 disabled={isSavingCustomer}
               />
+              {errors.dni && (
+                <div className="invalid-feedback">
+                  {errors.dni}
+                </div>
+              )}
             </div>
 
             <div className="col-12 col-md-6">
@@ -131,8 +224,7 @@ export function CustomerForm({
                 name="driving_license"
                 className="form-control py-2 px-3"
                 value={customerForm.driving_license}
-                onChange={onCustomerFormChange}
-                required
+                onChange={handleFieldChange}
                 disabled={isSavingCustomer}
               />
             </div>
@@ -146,12 +238,16 @@ export function CustomerForm({
                 id="customer_phone"
                 type="tel"
                 name="phone"
-                className="form-control py-2 px-3"
+                className={`form-control py-2 px-3 ${errors.phone ? "is-invalid" : ""}`}
                 value={customerForm.phone}
-                onChange={onCustomerFormChange}
-                required
+                onChange={handleFieldChange}
                 disabled={isSavingCustomer}
               />
+              {errors.phone && (
+                <div className="invalid-feedback">
+                  {errors.phone}
+                </div>
+              )}
             </div>
 
             <div className="col-12 col-md-6">
@@ -165,7 +261,7 @@ export function CustomerForm({
                 name="email"
                 className="form-control py-2 px-3"
                 value={customerForm.email}
-                onChange={onCustomerFormChange}
+                onChange={handleFieldChange}
                 disabled={isSavingCustomer}
               />
             </div>
@@ -181,7 +277,7 @@ export function CustomerForm({
                 name="address"
                 className="form-control py-2 px-3"
                 value={customerForm.address}
-                onChange={onCustomerFormChange}
+                onChange={handleFieldChange}
                 disabled={isSavingCustomer}
               />
             </div>

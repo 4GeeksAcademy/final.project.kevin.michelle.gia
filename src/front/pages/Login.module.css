@@ -35,7 +35,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 1.5rem;
 }
 
 .backButton:hover {
@@ -60,7 +59,6 @@
   margin: 0 auto;
   border-radius: 15px;
   padding: 14px 20px;
-  
 }
 
 .loginLogo {

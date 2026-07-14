@@ -54,9 +54,8 @@ function formatDateTime(dateValue) {
 }
 
 function getMechanicName(mechanic) {
-  const fullName = `${mechanic.first_name || ""} ${
-    mechanic.last_name || ""
-  }`.trim();
+  const fullName = `${mechanic.first_name || ""} ${mechanic.last_name || ""
+    }`.trim();
 
   return mechanic.name || fullName || mechanic.email || `Mechanic #${mechanic.id}`;
 }
@@ -64,7 +63,7 @@ function getMechanicName(mechanic) {
 function InfoRow({ label, value }) {
   return (
     <div className="col-md-6 mb-3">
-      <p className="mb-1 text-muted fw-semibold">{label}</p>
+      <p className="mb-1 fw-bold">{label}</p>
       <p className="mb-0">{value || "-"}</p>
     </div>
   );
@@ -76,6 +75,7 @@ export function ServiceDetailsModal({
   onClose,
   onServiceUpdated,
 }) {
+  const fileInputRef = useRef(null);
   const [service, setService] = useState(null);
   const [comments, setComments] = useState([]);
 
@@ -83,11 +83,10 @@ export function ServiceDetailsModal({
   const [commentType, setCommentType] = useState("note");
   const [commentImage, setCommentImage] = useState(null);
   const [commentImagePreview, setCommentImagePreview] = useState("");
-  const fileInputRef = useRef(null);
 
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingComment, setSavingComment] = useState(false);
-  const [error, setError] = useState("");
   const [showMechanicMenu, setShowMechanicMenu] = useState(false);
   const [availableMechanics, setAvailableMechanics] = useState([]);
   const [loadingMechanics, setLoadingMechanics] = useState(false);
@@ -116,56 +115,56 @@ export function ServiceDetailsModal({
   }
 
   async function loadMechanics() {
-  try {
-    setLoadingMechanics(true);
-    setError("");
+    try {
+      setLoadingMechanics(true);
+      setError("");
 
-    const data = await apiFetch("/mechanics");
+      const data = await apiFetch("/mechanics");
 
-    setAvailableMechanics(data.mechanics || []);
-  } catch (error) {
-    setError(error.message || "Could not load mechanics.");
-  } finally {
-    setLoadingMechanics(false);
-  }
-}
-
-async function handleToggleMechanicMenu() {
-  const shouldOpenMenu = !showMechanicMenu;
-
-  setShowMechanicMenu(shouldOpenMenu);
-
-  if (shouldOpenMenu && availableMechanics.length === 0) {
-    await loadMechanics();
-  }
-}
-
-async function handleReassignMechanic(mechanicId) {
-  try {
-    setReassigningMechanic(true);
-    setError("");
-
-    const data = await apiFetch(`/services/${serviceId}`, {
-      method: "PUT",
-      body: {
-        employee_id: mechanicId,
-      },
-    });
-
-    setService(data.service || data);
-    setShowMechanicMenu(false);
-
-    await loadDetails();
-
-    if (onServiceUpdated) {
-      await onServiceUpdated();
+      setAvailableMechanics(data.mechanics || []);
+    } catch (error) {
+      setError(error.message || "Could not load mechanics.");
+    } finally {
+      setLoadingMechanics(false);
     }
-  } catch (error) {
-    setError(error.message || "Could not reassign mechanic.");
-  } finally {
-    setReassigningMechanic(false);
   }
-}
+
+  async function handleToggleMechanicMenu() {
+    const shouldOpenMenu = !showMechanicMenu;
+
+    setShowMechanicMenu(shouldOpenMenu);
+
+    if (shouldOpenMenu && availableMechanics.length === 0) {
+      await loadMechanics();
+    }
+  }
+
+  async function handleReassignMechanic(mechanicId) {
+    try {
+      setReassigningMechanic(true);
+      setError("");
+
+      const data = await apiFetch(`/services/${serviceId}`, {
+        method: "PUT",
+        body: {
+          employee_id: mechanicId,
+        },
+      });
+
+      setService(data.service || data);
+      setShowMechanicMenu(false);
+
+      await loadDetails();
+
+      if (onServiceUpdated) {
+        await onServiceUpdated();
+      }
+    } catch (error) {
+      setError(error.message || "Could not reassign mechanic.");
+    } finally {
+      setReassigningMechanic(false);
+    }
+  }
 
 
   useEffect(() => {
@@ -372,7 +371,7 @@ async function handleReassignMechanic(mechanicId) {
                           )}
                         </div>
                       )}
-                      {/* --- FIN DEL BOTÓN AGREGADO --- */}
+
 
                     </div>
 
@@ -386,9 +385,8 @@ async function handleReassignMechanic(mechanicId) {
                   <div className="row">
                     <InfoRow
                       label="Vehicle"
-                      value={`${service.vehicle_brand || ""} ${
-                        service.vehicle_model || ""
-                      }`.trim()}
+                      value={`${service.vehicle_brand || ""} ${service.vehicle_model || ""
+                        }`.trim()}
                     />
 
                     <InfoRow label="Plate" value={service.vehicle_plate} />
@@ -574,7 +572,7 @@ async function handleReassignMechanic(mechanicId) {
               </button>
             </div>
           </div>
-        </div> 
+        </div>
       </div>
 
       <div className="modal-backdrop show"></div>

@@ -1,17 +1,12 @@
 // 1. BACKEND URL CONFIGURATION
 
 const DEFAULT_BACKEND_URL = "http://127.0.0.1:3001";
-const backendUrl =
-  import.meta.env.VITE_BACKEND_URL || DEFAULT_BACKEND_URL;
 
-// Removes a possible trailing "/" from the URL.
+const backendUrl = import.meta.env.VITE_BACKEND_URL || DEFAULT_BACKEND_URL;
+
 const cleanBackendUrl = backendUrl.replace(/\/$/, "");
 
-// If the URL already ends with "/api", keep it unchanged.
-// Otherwise, add "/api".
-const API_BASE_URL = cleanBackendUrl.endsWith("/api")
-  ? cleanBackendUrl
-  : `${cleanBackendUrl}/api`;
+const API_BASE_URL = cleanBackendUrl.endsWith("/api") ? cleanBackendUrl : `${cleanBackendUrl}/api`;
 
 // 2. FUNCTION TO READ PUBLIC RESPONSES
 
@@ -19,12 +14,11 @@ async function parseResponse(response) {
   const data = await response.json().catch(() => ({}));
 
   return {
-    // True if the response was successful.
-    // False if an error occurred.
-    ok: response.ok,
 
+    ok: response.ok,
     status: response.status,
     data: data,
+
   };
 }
 
@@ -85,7 +79,6 @@ export async function apiFetch(
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: method,
     headers: headers,
-
     body:
       body !== undefined
         ? JSON.stringify(body)
@@ -104,4 +97,72 @@ export async function apiFetch(
   }
 
   return data;
+}
+
+// 6. SERVICE STATUS HISTORY
+
+export async function getServiceStatusLogs(serviceId) {
+  return await apiFetch(
+    `/services/${serviceId}/status-logs`
+  );
+}
+// 7. UPDATE A SERVICE COMMENT
+
+export async function updateServiceComment(
+  serviceId,
+  commentId,
+  payload
+) {
+  return await apiFetch(
+    `/services/${serviceId}/comments/${commentId}`,
+    {
+      method: "PATCH",
+      body: payload,
+    }
+  );
+}
+
+// 8. DELETE A SERVICE COMMENT
+
+export async function deleteServiceComment(
+  serviceId,
+  commentId
+) {
+  return await apiFetch(
+    `/services/${serviceId}/comments/${commentId}`,
+    {
+      method: "DELETE",
+    }
+  );
+}
+
+// 9. CANCEL A SERVICE
+
+export async function cancelService(
+  serviceId,
+  reason = ""
+) {
+  return await apiFetch(
+    `/services/${serviceId}/cancel`,
+    {
+      method: "PATCH",
+      body: {
+        reason: reason,
+      },
+    }
+  );
+}
+
+// 10. PERMANENTLY DELETE A SERVICE
+
+export async function permanentlyDeleteService(serviceId) {
+  return await apiFetch(
+    `/services/${serviceId}`,
+    {
+      method: "DELETE",
+      body: {
+        confirm: true,
+      },
+    }
+  );
 }

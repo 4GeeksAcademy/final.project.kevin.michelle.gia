@@ -1,48 +1,77 @@
-const RAW_BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:3001";
+// 1. BACKEND URL CONFIGURATION
 
-const CLEAN_BACKEND_URL = RAW_BACKEND_URL.replace(/\/$/, "");
+const DEFAULT_BACKEND_URL = "http://127.0.0.1:3001";
+const backendUrl =
+  import.meta.env.VITE_BACKEND_URL || DEFAULT_BACKEND_URL;
 
-const API_BASE_URL = CLEAN_BACKEND_URL.endsWith("/api")
-  ? CLEAN_BACKEND_URL
-  : `${CLEAN_BACKEND_URL}/api`;
+// Removes a possible trailing "/" from the URL.
+const cleanBackendUrl = backendUrl.replace(/\/$/, "");
 
-const parseResponse = async (response) => {
+// If the URL already ends with "/api", keep it unchanged.
+// Otherwise, add "/api".
+const API_BASE_URL = cleanBackendUrl.endsWith("/api")
+  ? cleanBackendUrl
+  : `${cleanBackendUrl}/api`;
+
+// 2. FUNCTION TO READ PUBLIC RESPONSES
+
+async function parseResponse(response) {
   const data = await response.json().catch(() => ({}));
 
   return {
+    // True if the response was successful.
+    // False if an error occurred.
     ok: response.ok,
+
     status: response.status,
-    data,
+    data: data,
   };
-};
+}
 
+// 3. WORKSHOP REGISTRATION
 
-////////////////////////Register////////////////////////////////////////
-export const registerWorkshop = async (payload) => {
+export async function registerWorkshop(payload) {
   const response = await fetch(`${API_BASE_URL}/register`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+
+    headers: {
+      "Content-Type": "application/json",
+    },
+
+    body: JSON.stringify(payload),
   });
 
   return await parseResponse(response);
-};
-////////////////////////login///////
+}
 
-export const loginUser = async (email, password) => {
+// 4. USER LOGIN
+
+export async function loginUser(email, password) {
   const response = await fetch(`${API_BASE_URL}/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+
+    headers: {
+      "Content-Type": "application/json",
+    },
+
+    body: JSON.stringify({
+      email: email,
+      password: password,
+    }),
   });
 
   return await parseResponse(response);
-};
+}
 
-///////////////AUTHENTICATED FETCH (endpoints -> login)//////////////
+// 5. REQUESTS TO PROTECTED ENDPOINTS
 
-export async function apiFetch(path, { method = "GET", body } = {}) {
+export async function apiFetch(
+  path,
+  {
+    method = "GET",
+    body,
+  } = {}
+) {
   const token = localStorage.getItem("token");
 
   const headers = {
@@ -54,15 +83,24 @@ export async function apiFetch(path, { method = "GET", body } = {}) {
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    method: method,
+    headers: headers,
+
+    body:
+      body !== undefined
+        ? JSON.stringify(body)
+        : undefined,
   });
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.error || data.message || `HTTP ${response.status}`);
+    const errorMessage =
+      data.error ||
+      data.message ||
+      `HTTP ${response.status}`;
+
+    throw new Error(errorMessage);
   }
 
   return data;

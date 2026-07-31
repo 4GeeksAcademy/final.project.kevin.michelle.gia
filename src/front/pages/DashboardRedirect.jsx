@@ -17,7 +17,7 @@ const getStoredObject = (key) => {
   }
 };
 
-export const Dashboard = () => {
+export const DashboardRedirect = () => {
   const token = localStorage.getItem("token");
   const user = getStoredObject("user");
   const employee = getStoredObject("employee");

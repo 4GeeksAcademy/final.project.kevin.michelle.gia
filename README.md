@@ -1,167 +1,93 @@
-# Repair Board 🔧
+# WebApp boilerplate with React JS and Flask API
 
-Repair Board is a full-stack workshop management application designed to help administrators and mechanics organize customers, vehicles, repairs, assignments, and service progress from one place.
+Build web applications using React.js for the front end and python/flask for your backend API.
 
-The application was created as a collaborative final project during the 4Geeks Academy Full-Stack Development Bootcamp. This repository is my portfolio version of the project and includes later interface and functionality improvements.
+- Documentation can be found here: https://4geeks.com/docs/start/react-flask-template
+- Here is a video on [how to use this template](https://www.loom.com/share/f37c6838b3f1496c95111e515e83dd9b)
+- Integrated with Pipenv for package managing.
+- Fast deployment to Render [in just a few steps here](https://4geeks.com/docs/start/deploy-to-render-com).
+- Use of .env file.
+- SQLAlchemy integration for database abstraction.
 
-## Main Features
+### 1) Installation:
 
-- Authentication using JSON Web Tokens.
-- Role-based access for administrators and mechanics.
-- Customer and vehicle management.
-- Creation and tracking of repair services.
-- Visual service board organized by repair status.
-- Assignment and reassignment of mechanics.
-- Comments and image uploads for each service.
-- Service history and status tracking.
-- Responsive interface for managing daily workshop operations.
+> If you use Github Codespaces (recommended) or Gitpod this template will already come with Python, Node and the Posgres Database installed. If you are working locally make sure to install Python 3.10, Node 
 
-## User Roles
+It is recomended to install the backend first, make sure you have Python 3.10, Pipenv and a database engine (Posgress recomended)
 
-### Administrator
+1. Install the python packages: `$ pipenv install`
+2. Create a .env file based on the .env.example: `$ cp .env.example .env`
+3. Install your database engine and create your database, depending on your database you have to create a DATABASE_URL variable with one of the possible values, make sure you replace the valudes with your database information:
 
-Administrators can:
+| Engine    | DATABASE_URL                                        |
+| --------- | --------------------------------------------------- |
+| SQLite    | sqlite:////test.db                                  |
+| MySQL     | mysql://username:password@localhost:port/example    |
+| Postgress | postgres://username:password@localhost:5432/example |
 
-- Create and manage customers and vehicles.
-- Register new repair services.
-- View all active services.
-- Assign or reassign mechanics.
-- Review service details, comments, images, and status changes.
+4. Migrate the migrations: `$ pipenv run migrate` (skip if you have not made changes to the models on the `./src/api/models.py`)
+5. Run the migrations: `$ pipenv run upgrade`
+6. Run the application: `$ pipenv run start`
 
-### Mechanic
+> Note: Codespaces users can connect to psql by typing: `psql -h localhost -U gitpod example`
 
-Mechanics can:
+### Undo a migration
 
-- View their assigned services.
-- Claim available services.
-- Update the status of a repair.
-- Add comments and upload images.
-- Review the information associated with each vehicle and service.
+You are also able to undo a migration by running
 
-## Technologies
-
-### Frontend
-
-- React
-- JavaScript
-- Vite
-- HTML
-- CSS
-
-### Backend
-
-- Python
-- Flask
-- SQLAlchemy
-- Flask-Migrate
-- JWT authentication
-- REST API
-
-### Database and Services
-
-- PostgreSQL
-- Cloudinary
-- Render
-- Vercel
-
-## Project Structure
-
-The repository separates the main responsibilities of the frontend, backend, database, and documentation.
-
-```text
-repair-board/
-├── src/              # Main application source code
-├── public/           # Public assets and static files
-├── Workshop API/     # Backend API and server-side resources
-├── migrations/       # Database migration files
-├── docs/             # Project documentation and supporting assets
-├── dist/             # Production build files
-├── README.md         # Main project documentation
-└── README.es.md      # Spanish documentation
+```sh
+$ pipenv run downgrade
 ```
 
-This organization keeps the interface, application logic, database management, and documentation separated, making the project easier to understand and maintain.
+### Backend Populate Table Users
 
-## Local Installation
+To insert test users in the database execute the following command:
 
-### Requirements
-
-Before starting, make sure you have installed:
-
-- Python 3.10 or later
-- Pipenv
-- Node.js 20 or later
-- PostgreSQL
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/Sweetaxonomy/repair-board.git
-cd repair-board
+```sh
+$ flask insert-test-users 5
 ```
 
-### 2. Install backend dependencies
+And you will see the following message:
 
-```bash
-pipenv install
+```
+  Creating test users
+  test_user1@test.com created.
+  test_user2@test.com created.
+  test_user3@test.com created.
+  test_user4@test.com created.
+  test_user5@test.com created.
+  Users created successfully!
 ```
 
-### 3. Configure environment variables
+### **Important note for the database and the data inside it**
 
-Create a local `.env` file using `.env.example` as a reference:
+Every Github codespace environment will have **its own database**, so if you're working with more people eveyone will have a different database and different records inside it. This data **will be lost**, so don't spend too much time manually creating records for testing, instead, you can automate adding records to your database by editing ```commands.py``` file inside ```/src/api``` folder. Edit line 32 function ```insert_test_data``` to insert the data according to your model (use the function ```insert_test_users``` above as an example). Then, all you need to do is run ```pipenv run insert-test-data```.
 
-```bash
-cp .env.example .env
-```
+### Front-End Manual Installation:
 
-Add the required database, authentication, and Cloudinary credentials to the `.env` file.
+-   Make sure you are using node version 20 and that you have already successfully installed and runned the backend.
 
-Never upload your real `.env` file or private credentials to GitHub.
+1. Install the packages: `$ npm install`
+2. Start coding! start the webpack dev server `$ npm run start`
 
-### 4. Run database migrations
+## Publish your website!
 
-```bash
-pipenv run flask --app src/app.py db upgrade
-```
+This boilerplate it's 100% read to deploy with Render.com and Heroku in a matter of minutes. Please read the [official documentation about it](https://4geeks.com/docs/start/deploy-to-render-com).
 
-### 5. Start the backend
+### Contributors
 
-```bash
-pipenv run start
-```
+This template was built as part of the 4Geeks Academy [Coding Bootcamp](https://4geeksacademy.com/us/coding-bootcamp) by [Alejandro Sanchez](https://twitter.com/alesanchezr) and many other contributors. Find out more about our [Full Stack Developer Course](https://4geeksacademy.com/us/coding-bootcamps/part-time-full-stack-developer), and [Data Science Bootcamp](https://4geeksacademy.com/us/coding-bootcamps/datascience-machine-learning).
 
-### 6. Install frontend dependencies
+You can find other templates and resources like this at the [school github page](https://github.com/4geeksacademy/).
 
-Open another terminal and run:
 
-```bash
-npm install
-```
+##-------------------------------------------------------------
 
-### 7. Start the frontend
+## Pasos para correr el backend projecto kevin.michelle.gia
 
-```bash
-npm run start
-```
-
-## Project Background
-
-Repair Board was developed collaboratively as a final bootcamp project. The team worked on the database models, API endpoints, authentication, user roles, service-management workflow, and frontend interface.
-
-This repository preserves the collaborative project history while serving as my personalized portfolio version.
-
-## Future Improvements
-
-- Improve automated testing.
-- Add service notifications.
-- Expand reporting and workshop statistics.
-- Improve accessibility.
-- Continue refining the mobile experience.
-
-## Author
-
-**Michelle Sirvent**
-
-Junior Full-Stack Developer interested in creating useful, intuitive, and visually clear web applications.
-
-Feel free to explore the repository and its development history.
+- git clone URL_DEL_REPO
+- cd final.project.kevin.michelle.gia
+- pipenv install
+- pipenv run flask --app src/app.py db upgrade
+- cd src
+- pipenv run python app.py

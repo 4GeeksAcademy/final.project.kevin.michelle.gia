@@ -9,7 +9,6 @@ from sqlalchemy import or_
 import cloudinary.uploader
 from api.models import (
     db,
-    utc_now,
     Workshop,
     User,
     Employee,
@@ -273,7 +272,6 @@ def get_options():
     }), 200
 
 
-
 ###---------------REGISTER----------------------
 
 @api.route("/register", methods=["POST"])
@@ -281,8 +279,11 @@ def register():
 
     data = request.get_json() or {}
 
-    company_name = (data.get("company_name") or "").strip()
-    cif = (data.get("cif") or "").strip() or None
+    company_name = data.get("company_name")
+    cif = data.get("cif")
+
+    workshop_phone = data.get("workshop_phone") or data.get("phone")
+    workshop_email = data.get("workshop_email") or data.get("email")
 
     address = data.get("address")
     city = data.get("city")
@@ -291,78 +292,40 @@ def register():
     first_name = data.get("first_name")
     last_name = data.get("last_name")
     dni = data.get("dni")
-
-    employee_phone = (
-        data.get("employee_phone")
-        or data.get("admin_phone")
-        or data.get("phone")
-    )
+    employee_phone = data.get("employee_phone") or data.get("admin_phone") or data.get("phone")
 
     user_email = data.get("user_email") or data.get("email")
     password = data.get("password")
     password_confirm = data.get("password_confirm")
 
-    workshop_phone = data.get("workshop_phone") or employee_phone
-    workshop_email = data.get("workshop_email") or user_email
-
-    if not company_name:
-        return error_response("company_name is required", 400)
+    if not company_name or not cif or not workshop_phone or not workshop_email:
+        return error_response("company_name, cif, workshop_phone and workshop_email are required", 400)
 
     if not first_name or not last_name or not dni or not employee_phone:
-        return error_response(
-            "first_name, last_name, dni and employee_phone are required for the admin employee",
-            400
-        )
+        return error_response("first_name, last_name, dni and employee_phone are required for the admin employee", 400)
 
     if not user_email or not password:
-        return error_response(
-            "user_email and password are required",
-            400
-        )
+        return error_response("user_email and password are required", 400)
 
     if password != password_confirm:
         return error_response("Passwords do not match", 400)
 
-    existing_workshop_email = Workshop.query.filter_by(
-        email=workshop_email
+    existing_workshop = Workshop.query.filter(
+        (Workshop.email == workshop_email) | (Workshop.cif == cif)
     ).first()
 
-    if existing_workshop_email:
-        return error_response(
-            "A workshop with this email already exists",
-            409
-        )
+    if existing_workshop:
+        return error_response("A workshop with this email or CIF already exists", 409)
 
-    if cif:
-        existing_workshop_cif = Workshop.query.filter_by(
-            cif=cif
-        ).first()
-
-        if existing_workshop_cif:
-            return error_response(
-                "A workshop with this CIF already exists",
-                409
-            )
-
-    existing_employee = Employee.query.filter_by(
-        dni=dni
-    ).first()
+    existing_employee = Employee.query.filter_by(dni=dni).first()
 
     if existing_employee:
-        return error_response(
-            "An employee with this DNI already exists",
-            409
-        )
+        return error_response("An employee with this DNI already exists", 409)
 
-    existing_user = User.query.filter_by(
-        email=user_email
-    ).first()
+    existing_user = User.query.filter_by(email=user_email).first()
 
     if existing_user:
-        return error_response(
-            "A user with this email already exists",
-            409
-        )
+        return error_response("A user with this email already exists", 409)
 
     new_workshop = Workshop(
         company_name=company_name,
@@ -390,9 +353,7 @@ def register():
     db.session.add(admin_employee)
     db.session.flush()
 
-    password_hash = bcrypt.generate_password_hash(
-        password
-    ).decode("utf-8")
+    password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
 
     admin_user = User(
         email=user_email,
@@ -1458,7 +1419,7 @@ def get_service_detail(service_id):
     }), 200
 
 
-##---------------SERVICES UPDATE----------------------
+###---------------SERVICES UPDATE----------------------
 
 @api.route("/services/<int:service_id>", methods=["PUT"])
 @jwt_required()
@@ -1467,15 +1428,9 @@ def update_service(service_id):
     current_user = get_current_user()
 
     if not is_admin(current_user):
-        return error_response(
-            "Only admin users can update services",
-            403
-        )
+        return error_response("Only admin users can update services", 403)
 
-    service, error = get_service_or_error(
-        service_id,
-        current_user
-    )
+    service, error = get_service_or_error(service_id, current_user)
 
     if error:
         return error
@@ -1507,49 +1462,33 @@ def update_service(service_id):
     vehicle = service.vehicle
 
     if "customer_id" in data and data.get("customer_id"):
-        customer, error = get_customer_or_error(
-            data.get("customer_id"),
-            current_user
-        )
+        customer, error = get_customer_or_error(data.get("customer_id"), current_user)
 
         if error:
             return error
 
     if "vehicle_id" in data and data.get("vehicle_id"):
-        vehicle, error = get_vehicle_or_error(
-            data.get("vehicle_id"),
-            current_user
-        )
+        vehicle, error = get_vehicle_or_error(data.get("vehicle_id"), current_user)
 
         if error:
             return error
 
     if customer and vehicle and vehicle.customer_id != customer.id:
-        return error_response(
-            "This vehicle does not belong to the selected customer",
-            400
-        )
+        return error_response("This vehicle does not belong to the selected customer", 400)
 
     if "employee_id" in data:
         employee_id = data.get("employee_id") or None
 
         if employee_id:
-            assigned_employee, error = get_employee_or_error(
-                employee_id,
-                current_user
-            )
+            assigned_employee, error = get_employee_or_error(employee_id, current_user)
 
             if error:
                 return error
 
             if assigned_employee.role != "mechanic":
-                return error_response(
-                    "The assigned employee must be a mechanic",
-                    400
-                )
+                return error_response("The assigned employee must be a mechanic", 400)
 
             service.employee_id = assigned_employee.id
-
         else:
             service.employee_id = None
 
@@ -1573,22 +1512,10 @@ def update_service(service_id):
             setattr(service, field, data[field])
 
     if "start_date" in data:
-        if not data.get("start_date"):
-            return error_response(
-                "start_date cannot be empty",
-                400
-            )
-
-        service.start_date = parse_datetime(
-            data.get("start_date")
-        )
+        service.start_date = parse_datetime(data.get("start_date")) if data.get("start_date") else None
 
     if "end_date" in data:
-        service.end_date = (
-            parse_datetime(data.get("end_date"))
-            if data.get("end_date")
-            else None
-        )
+        service.end_date = parse_datetime(data.get("end_date")) if data.get("end_date") else None
 
     if "status" in data:
         new_status = data.get("status")
@@ -1598,11 +1525,7 @@ def update_service(service_id):
 
             create_status_log(
                 service=service,
-                employee_id=(
-                    current_employee.id
-                    if current_employee
-                    else None
-                ),
+                employee_id=current_employee.id if current_employee else None,
                 new_status=new_status,
                 note=data.get("status_note")
             )
@@ -1684,10 +1607,7 @@ def get_service_status_logs(service_id):
     current_user = get_current_user()
 
     if not is_admin(current_user) and not is_mechanic(current_user):
-        return error_response(
-            "Only admin or mechanic users can see service status logs",
-            403
-        )
+        return error_response("Only admin or mechanic users can see service status logs", 403)
 
     service, error = get_service_or_error(service_id, current_user)
 
@@ -1698,223 +1618,54 @@ def get_service_status_logs(service_id):
         current_employee = get_current_employee(current_user)
 
         if not current_employee:
-            return error_response(
-                "Employee profile not found",
-                404
-            )
+            return error_response("Employee profile not found", 404)
 
         if service.employee_id != current_employee.id:
-            return error_response(
-                "You do not have permission to see these logs",
-                403
-            )
+            return error_response("You do not have permission to see these logs", 403)
 
     logs = (
         ServiceStatusLog.query
         .filter_by(service_id=service.id)
-        .order_by(ServiceStatusLog.changed_at.asc())
+        .order_by(ServiceStatusLog.changed_at.desc())
         .all()
     )
 
-    now = datetime.now(timezone.utc)
-    status_history = []
-
-    for index, log in enumerate(logs):
-        entered_at = log.changed_at
-
-        if entered_at.tzinfo is None:
-            entered_at = entered_at.replace(
-                tzinfo=timezone.utc
-            )
-
-        next_log = (
-            logs[index + 1]
-            if index + 1 < len(logs)
-            else None
-        )
-
-        exited_at = (
-            next_log.changed_at
-            if next_log
-            else None
-        )
-
-        if exited_at and exited_at.tzinfo is None:
-            exited_at = exited_at.replace(
-                tzinfo=timezone.utc
-            )
-
-        duration_end = exited_at or now
-
-        duration_seconds = max(
-            0,
-            int(
-                (duration_end - entered_at).total_seconds()
-            )
-        )
-
-        log_data = log.serialize()
-
-        log_data.update({
-            "entered_at": entered_at.isoformat(),
-            "exited_at": (
-                exited_at.isoformat()
-                if exited_at
-                else None
-            ),
-            "duration_seconds": duration_seconds,
-            "is_current": next_log is None
-        })
-
-        status_history.append(log_data)
-
     return jsonify({
-        "status_logs": status_history
+        "status_logs": [log.serialize() for log in logs]
     }), 200
 
-###---------------SERVICES CANCEL----------------------
 
-@api.route("/services/<int:service_id>/cancel", methods=["PATCH"])
+###---------------SERVICES DELETE----------------------
+
+@api.route("/services/<int:service_id>", methods=["DELETE"])
 @jwt_required()
-def cancel_service(service_id):
+def delete_service(service_id):
 
     current_user = get_current_user()
 
     if not is_admin(current_user):
-        return error_response(
-            "Only admin users can cancel services",
-            403
-        )
+        return error_response("Only admin users can delete services", 403)
 
-    service, error = get_service_or_error(
-        service_id,
-        current_user
-    )
+    service, error = get_service_or_error(service_id, current_user)
 
     if error:
         return error
 
-    if service.status == "cancelled":
-        return jsonify({
-            "message": "Service is already cancelled",
-            "service": service.serialize()
-        }), 200
-
     current_employee = get_current_employee(current_user)
 
-    if not current_employee:
-        return error_response(
-            "Employee profile not found",
-            404
+    if service.status != "cancelled":
+        create_status_log(
+            service=service,
+            employee_id=current_employee.id if current_employee else None,
+            new_status="cancelled",
+            note="Service cancelled"
         )
-
-    data = request.get_json() or {}
-    reason = (data.get("reason") or "").strip()
-
-    cancellation_note = (
-        reason
-        or "Service cancelled"
-    )
-
-    create_status_log(
-        service=service,
-        employee_id=current_employee.id,
-        new_status="cancelled",
-        note=cancellation_note
-    )
 
     db.session.commit()
 
     return jsonify({
         "message": "Service cancelled successfully",
         "service": service.serialize()
-    }), 200
-
-###---------------SERVICES PERMANENT DELETE----------------------
-
-@api.route("/services/<int:service_id>", methods=["DELETE"])
-@jwt_required()
-def permanently_delete_service(service_id):
-
-    current_user = get_current_user()
-
-    if not is_admin(current_user):
-        return error_response(
-            "Only admin users can permanently delete services",
-            403
-        )
-
-    service, error = get_service_or_error(
-        service_id,
-        current_user
-    )
-
-    if error:
-        return error
-
-    data = request.get_json(silent=True) or {}
-
-    if data.get("confirm") is not True:
-        return error_response(
-            "confirm must be true to permanently delete a service",
-            400
-        )
-
-    image_public_ids = [
-        comment.image_public_id
-        for comment in service.comments
-        if comment.image_public_id
-    ]
-
-    try:
-        db.session.delete(service)
-        db.session.flush()
-
-    except Exception:
-        db.session.rollback()
-
-        return error_response(
-            "Service deletion failed",
-            500
-        )
-
-    for image_public_id in image_public_ids:
-        try:
-            delete_result = cloudinary.uploader.destroy(
-                image_public_id,
-                resource_type="image",
-                invalidate=True
-            )
-
-            if delete_result.get("result") not in ["ok", "not found"]:
-                db.session.rollback()
-
-                return error_response(
-                    "Image deletion failed",
-                    500
-                )
-
-        except Exception:
-            db.session.rollback()
-
-            return error_response(
-                "Image deletion failed",
-                500
-            )
-
-    try:
-        db.session.commit()
-
-    except Exception:
-        db.session.rollback()
-
-        return error_response(
-            "Service deletion failed",
-            500
-        )
-
-    return jsonify({
-        "message": "Service permanently deleted successfully"
     }), 200
 ###----------SERVICE COMMENTS GET---------------------
 
@@ -2022,179 +1773,6 @@ def create_service_comment(service_id):
         "message": "Comment created successfully",
         "comment": comment.serialize()
     }), 201
-
-###--------------- SERVICE COMMENTS UPDATE -------------
-
-@api.route(
-    "/services/<int:service_id>/comments/<int:comment_id>",
-    methods=["PATCH"]
-)
-@jwt_required()
-def update_service_comment(service_id, comment_id):
-
-    current_user = get_current_user()
-
-    if not is_admin(current_user) and not is_mechanic(current_user):
-        return error_response(
-            "Only admin or mechanic users can update comments",
-            403
-        )
-
-    service, error = get_service_or_error(service_id, current_user)
-
-    if error:
-        return error
-
-    current_employee = get_current_employee(current_user)
-
-    if not current_employee:
-        return error_response(
-            "Employee profile not found",
-            404
-        )
-
-    if is_mechanic(current_user) and service.employee_id != current_employee.id:
-        return error_response(
-            "You do not have permission to access this service",
-            403
-        )
-
-    comment = ServiceComment.query.filter_by(
-        id=comment_id,
-        service_id=service.id
-    ).first()
-
-    if not comment:
-        return error_response(
-            "Comment not found",
-            404
-        )
-
-    if is_mechanic(current_user) and comment.employee_id != current_employee.id:
-        return error_response(
-            "You can only edit your own comments",
-            403
-        )
-
-    data = request.get_json() or {}
-
-    if "comment" not in data and "comment_type" not in data:
-        return error_response(
-            "comment or comment_type is required",
-            400
-        )
-
-    if "comment" in data:
-        comment_text = (data.get("comment") or "").strip()
-
-        if not comment_text:
-            return error_response(
-                "comment cannot be empty",
-                400
-            )
-
-        comment.comment = comment_text
-
-    if "comment_type" in data:
-        comment_type = data.get("comment_type")
-
-        if comment_type not in COMMENT_TYPES:
-            return jsonify({
-                "message": "Invalid comment_type",
-                "error": "Invalid comment_type",
-                "allowed_values": COMMENT_TYPES
-            }), 400
-
-        comment.comment_type = comment_type
-
-    comment.updated_at = utc_now()
-
-    db.session.commit()
-
-    return jsonify({
-        "message": "Comment updated successfully",
-        "comment": comment.serialize()
-    }), 200
-
-###--------------- SERVICE COMMENTS DELETE -------------
-
-@api.route(
-    "/services/<int:service_id>/comments/<int:comment_id>",
-    methods=["DELETE"]
-)
-@jwt_required()
-def delete_service_comment(service_id, comment_id):
-
-    current_user = get_current_user()
-
-    if not is_admin(current_user) and not is_mechanic(current_user):
-        return error_response(
-            "Only admin or mechanic users can delete comments",
-            403
-        )
-
-    service, error = get_service_or_error(service_id, current_user)
-
-    if error:
-        return error
-
-    current_employee = get_current_employee(current_user)
-
-    if not current_employee:
-        return error_response(
-            "Employee profile not found",
-            404
-        )
-
-    if is_mechanic(current_user) and service.employee_id != current_employee.id:
-        return error_response(
-            "You do not have permission to access this service",
-            403
-        )
-
-    comment = ServiceComment.query.filter_by(
-        id=comment_id,
-        service_id=service.id
-    ).first()
-
-    if not comment:
-        return error_response(
-            "Comment not found",
-            404
-        )
-
-    if is_mechanic(current_user) and comment.employee_id != current_employee.id:
-        return error_response(
-            "You can only delete your own comments",
-            403
-        )
-
-    if comment.image_public_id:
-        try:
-            delete_result = cloudinary.uploader.destroy(
-                comment.image_public_id,
-                resource_type="image",
-                invalidate=True
-            )
-
-            if delete_result.get("result") not in ["ok", "not found"]:
-                return error_response(
-                    "Image deletion failed",
-                    500
-                )
-
-        except Exception:
-            return error_response(
-                "Image deletion failed",
-                500
-            )
-
-    db.session.delete(comment)
-    db.session.commit()
-
-    return jsonify({
-        "message": "Comment deleted successfully"
-    }), 200
 
 ##------------COMMENTS: NOTIFY ADMIN---------------
 

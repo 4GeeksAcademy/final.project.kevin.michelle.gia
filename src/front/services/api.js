@@ -1,71 +1,48 @@
-// 1. BACKEND URL CONFIGURATION
+const RAW_BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:3001";
 
-const DEFAULT_BACKEND_URL = "http://127.0.0.1:3001";
+const CLEAN_BACKEND_URL = RAW_BACKEND_URL.replace(/\/$/, "");
 
-const backendUrl = import.meta.env.VITE_BACKEND_URL || DEFAULT_BACKEND_URL;
+const API_BASE_URL = CLEAN_BACKEND_URL.endsWith("/api")
+  ? CLEAN_BACKEND_URL
+  : `${CLEAN_BACKEND_URL}/api`;
 
-const cleanBackendUrl = backendUrl.replace(/\/$/, "");
-
-const API_BASE_URL = cleanBackendUrl.endsWith("/api") ? cleanBackendUrl : `${cleanBackendUrl}/api`;
-
-// 2. FUNCTION TO READ PUBLIC RESPONSES
-
-async function parseResponse(response) {
+const parseResponse = async (response) => {
   const data = await response.json().catch(() => ({}));
 
   return {
-
     ok: response.ok,
     status: response.status,
-    data: data,
-
+    data,
   };
-}
+};
 
-// 3. WORKSHOP REGISTRATION
 
-export async function registerWorkshop(payload) {
+////////////////////////Register////////////////////////////////////////
+export const registerWorkshop = async (payload) => {
   const response = await fetch(`${API_BASE_URL}/register`, {
     method: "POST",
-
-    headers: {
-      "Content-Type": "application/json",
-    },
-
-    body: JSON.stringify(payload),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
   });
 
   return await parseResponse(response);
-}
+};
+////////////////////////login///////
 
-// 4. USER LOGIN
-
-export async function loginUser(email, password) {
+export const loginUser = async (email, password) => {
   const response = await fetch(`${API_BASE_URL}/login`, {
     method: "POST",
-
-    headers: {
-      "Content-Type": "application/json",
-    },
-
-    body: JSON.stringify({
-      email: email,
-      password: password,
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
   });
 
   return await parseResponse(response);
-}
+};
 
-// 5. REQUESTS TO PROTECTED ENDPOINTS
+///////////////AUTHENTICATED FETCH (endpoints -> login)//////////////
 
-export async function apiFetch(
-  path,
-  {
-    method = "GET",
-    body,
-  } = {}
-) {
+export async function apiFetch(path, { method = "GET", body } = {}) {
   const token = localStorage.getItem("token");
 
   const headers = {
@@ -77,92 +54,16 @@ export async function apiFetch(
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: method,
-    headers: headers,
-    body:
-      body !== undefined
-        ? JSON.stringify(body)
-        : undefined,
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const errorMessage =
-      data.error ||
-      data.message ||
-      `HTTP ${response.status}`;
-
-    throw new Error(errorMessage);
+    throw new Error(data.error || data.message || `HTTP ${response.status}`);
   }
 
   return data;
-}
-
-// 6. SERVICE STATUS HISTORY
-
-export async function getServiceStatusLogs(serviceId) {
-  return await apiFetch(
-    `/services/${serviceId}/status-logs`
-  );
-}
-// 7. UPDATE A SERVICE COMMENT
-
-export async function updateServiceComment(
-  serviceId,
-  commentId,
-  payload
-) {
-  return await apiFetch(
-    `/services/${serviceId}/comments/${commentId}`,
-    {
-      method: "PATCH",
-      body: payload,
-    }
-  );
-}
-
-// 8. DELETE A SERVICE COMMENT
-
-export async function deleteServiceComment(
-  serviceId,
-  commentId
-) {
-  return await apiFetch(
-    `/services/${serviceId}/comments/${commentId}`,
-    {
-      method: "DELETE",
-    }
-  );
-}
-
-// 9. CANCEL A SERVICE
-
-export async function cancelService(
-  serviceId,
-  reason = ""
-) {
-  return await apiFetch(
-    `/services/${serviceId}/cancel`,
-    {
-      method: "PATCH",
-      body: {
-        reason: reason,
-      },
-    }
-  );
-}
-
-// 10. PERMANENTLY DELETE A SERVICE
-
-export async function permanentlyDeleteService(serviceId) {
-  return await apiFetch(
-    `/services/${serviceId}`,
-    {
-      method: "DELETE",
-      body: {
-        confirm: true,
-      },
-    }
-  );
 }

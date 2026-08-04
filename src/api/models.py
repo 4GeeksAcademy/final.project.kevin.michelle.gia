@@ -4,6 +4,10 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
+def utc_now():
+    return datetime.now(timezone.utc)
+
+
 # ============================================================
 #   WORKSHOP
 # ============================================================
@@ -15,14 +19,19 @@ class Workshop(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     company_name = db.Column(db.String(120), nullable=False)
-    cif = db.Column(db.String(50), unique=True, nullable=False)
+    cif = db.Column(db.String(50), unique=True, nullable=True)
     phone = db.Column(db.String(20), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     address = db.Column(db.String(200), nullable=True)
     city = db.Column(db.String(80), nullable=True)
     postal_code = db.Column(db.String(20), nullable=True)
     is_active = db.Column(db.Boolean(), default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False
+    )
 
     employees = db.relationship("Employee", backref="workshop", lazy=True)
     customers = db.relationship("Customer", backref="workshop", lazy=True)
@@ -32,7 +41,6 @@ class Workshop(db.Model):
     def serialize(self):
 
         return {
-
             "id": self.id,
             "company_name": self.company_name,
             "cif": self.cif,
@@ -43,7 +51,6 @@ class Workshop(db.Model):
             "postal_code": self.postal_code,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None
-
         }
 
 
@@ -59,21 +66,33 @@ class User(db.Model):
 
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    employee_id = db.Column(
+        db.Integer,
+        db.ForeignKey("employees.id"),
+        unique=True,
+        nullable=False
+    )
 
-    employee = db.relationship("Employee", backref=db.backref("user", uselist=False), uselist=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False
+    )
+
+    employee = db.relationship(
+        "Employee",
+        backref=db.backref("user", uselist=False),
+        uselist=False
+    )
 
     def serialize(self):
 
         return {
-
             "id": self.id,
             "email": self.email,
             "employee_id": self.employee_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "employee": self.employee.serialize_basic() if self.employee else None
-
         }
 
 
@@ -97,29 +116,35 @@ class Employee(db.Model):
     role = db.Column(db.String(20), nullable=False, default="mechanic")
     job_position = db.Column(db.String(80), nullable=True)
     specialty = db.Column(db.String(120), nullable=True)
-    workshop_id = db.Column(db.Integer, db.ForeignKey("workshops.id"), nullable=False)
+    workshop_id = db.Column(
+        db.Integer,
+        db.ForeignKey("workshops.id"),
+        nullable=False
+    )
     is_active = db.Column(db.Boolean(), default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False
+    )
 
     services = db.relationship("Service", backref="employee", lazy=True)
 
     def serialize_basic(self):
 
         return {
-
             "id": self.id,
             "first_name": self.first_name,
             "last_name": self.last_name,
             "role": self.role,
             "workshop_id": self.workshop_id,
             "is_active": self.is_active
-
         }
 
     def serialize(self):
 
         return {
-
             "id": self.id,
             "first_name": self.first_name,
             "last_name": self.last_name,
@@ -135,7 +160,6 @@ class Employee(db.Model):
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "email": self.user.email if self.user else None
-
         }
 
 
@@ -157,10 +181,19 @@ class Customer(db.Model):
     email = db.Column(db.String(120), nullable=True)
     address = db.Column(db.String(200), nullable=True)
 
-    workshop_id = db.Column(db.Integer, db.ForeignKey("workshops.id"), nullable=False)
+    workshop_id = db.Column(
+        db.Integer,
+        db.ForeignKey("workshops.id"),
+        nullable=False
+    )
 
     is_active = db.Column(db.Boolean(), default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False
+    )
 
     vehicles = db.relationship("Vehicle", backref="customer", lazy=True)
     services = db.relationship("Service", backref="customer", lazy=True)
@@ -168,7 +201,6 @@ class Customer(db.Model):
     def serialize(self):
 
         return {
-
             "id": self.id,
             "first_name": self.first_name,
             "last_name": self.last_name,
@@ -180,7 +212,6 @@ class Customer(db.Model):
             "workshop_id": self.workshop_id,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None
-
         }
 
 
@@ -207,18 +238,31 @@ class Vehicle(db.Model):
     mileage = db.Column(db.Integer, default=0, nullable=False)
     first_registration_date = db.Column(db.Date, nullable=True)
 
-    customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=False)
-    workshop_id = db.Column(db.Integer, db.ForeignKey("workshops.id"), nullable=False)
+    customer_id = db.Column(
+        db.Integer,
+        db.ForeignKey("customers.id"),
+        nullable=False
+    )
+
+    workshop_id = db.Column(
+        db.Integer,
+        db.ForeignKey("workshops.id"),
+        nullable=False
+    )
 
     is_active = db.Column(db.Boolean(), default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False
+    )
 
     services = db.relationship("Service", backref="vehicle", lazy=True)
 
     def serialize(self):
 
         return {
-
             "id": self.id,
             "plate": self.plate,
             "vin": self.vin,
@@ -231,13 +275,20 @@ class Vehicle(db.Model):
             "engine_cc": self.engine_cc,
             "color": self.color,
             "mileage": self.mileage,
-            "first_registration_date": self.first_registration_date.isoformat() if self.first_registration_date else None,
+            "first_registration_date": (
+                self.first_registration_date.isoformat()
+                if self.first_registration_date
+                else None
+            ),
             "customer_id": self.customer_id,
             "workshop_id": self.workshop_id,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "customer_name": f"{self.customer.first_name} {self.customer.last_name}" if self.customer else None
-
+            "customer_name": (
+                f"{self.customer.first_name} {self.customer.last_name}"
+                if self.customer
+                else None
+            )
         }
 
 
@@ -258,24 +309,74 @@ class Service(db.Model):
     priority = db.Column(db.String(20), default="normal", nullable=False)
 
     entry_mileage = db.Column(db.Integer, nullable=True)
-    start_date = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    end_date = db.Column(db.DateTime, nullable=True)
+
+    start_date = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False
+    )
+
+    end_date = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True
+    )
+
     observations = db.Column(db.Text, nullable=True)
 
-    workshop_id = db.Column(db.Integer, db.ForeignKey("workshops.id"), nullable=False)
-    customer_id = db.Column(db.Integer, db.ForeignKey("customers.id"), nullable=False)
-    vehicle_id = db.Column(db.Integer, db.ForeignKey("vehicles.id"), nullable=False)
-    employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    workshop_id = db.Column(
+        db.Integer,
+        db.ForeignKey("workshops.id"),
+        nullable=False
+    )
 
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    customer_id = db.Column(
+        db.Integer,
+        db.ForeignKey("customers.id"),
+        nullable=False
+    )
 
-    comments = db.relationship("ServiceComment", backref="service", lazy=True)
-    status_logs = db.relationship("ServiceStatusLog", backref="service", lazy=True)
+    vehicle_id = db.Column(
+        db.Integer,
+        db.ForeignKey("vehicles.id"),
+        nullable=False
+    )
+
+    employee_id = db.Column(
+        db.Integer,
+        db.ForeignKey("employees.id"),
+        nullable=True
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False
+    )
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False
+    )
+
+    comments = db.relationship(
+        "ServiceComment",
+        backref="service",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+
+    status_logs = db.relationship(
+        "ServiceStatusLog",
+        backref="service",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
 
     def serialize(self):
 
         return {
-
             "id": self.id,
             "title": self.title,
             "description": self.description,
@@ -291,12 +392,20 @@ class Service(db.Model):
             "vehicle_id": self.vehicle_id,
             "employee_id": self.employee_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "vehicle_plate": self.vehicle.plate if self.vehicle else None,
             "vehicle_brand": self.vehicle.brand if self.vehicle else None,
             "vehicle_model": self.vehicle.model if self.vehicle else None,
-            "customer_name": f"{self.customer.first_name} {self.customer.last_name}" if self.customer else None,
-            "employee_name": f"{self.employee.first_name} {self.employee.last_name}" if self.employee else None
-
+            "customer_name": (
+                f"{self.customer.first_name} {self.customer.last_name}"
+                if self.customer
+                else None
+            ),
+            "employee_name": (
+                f"{self.employee.first_name} {self.employee.last_name}"
+                if self.employee
+                else None
+            )
         }
 
 
@@ -316,27 +425,54 @@ class ServiceComment(db.Model):
     image_url = db.Column(db.String(500), nullable=True)
     image_public_id = db.Column(db.String(255), nullable=True)
 
-    service_id = db.Column(db.Integer, db.ForeignKey("services.id"), nullable=False)
-    employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    service_id = db.Column(
+        db.Integer,
+        db.ForeignKey("services.id", ondelete="CASCADE"),
+        nullable=False
+    )
 
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    employee_id = db.Column(
+        db.Integer,
+        db.ForeignKey("employees.id"),
+        nullable=False
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False
+    )
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True
+    )
 
     author = db.relationship("Employee", foreign_keys=[employee_id])
 
     def serialize(self):
 
         return {
-
             "id": self.id,
             "comment": self.comment,
             "comment_type": self.comment_type,
             "service_id": self.service_id,
             "employee_id": self.employee_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "author_name": f"{self.author.first_name} {self.author.last_name}" if self.author else None,
-            "author_email": self.author.user.email if self.author and self.author.user else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "is_edited": self.updated_at is not None,
+            "author_name": (
+                f"{self.author.first_name} {self.author.last_name}"
+                if self.author
+                else None
+            ),
+            "author_email": (
+                self.author.user.email
+                if self.author and self.author.user
+                else None
+            ),
             "image_url": self.image_url,
-            "image_public_id": self.image_public_id,
+            "image_public_id": self.image_public_id
         }
 
 
@@ -350,52 +486,91 @@ class ServiceStatusLog(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    service_id = db.Column(db.Integer, db.ForeignKey("services.id"), nullable=False)
+    service_id = db.Column(
+        db.Integer,
+        db.ForeignKey("services.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
     from_status = db.Column(db.String(30), nullable=True)
     to_status = db.Column(db.String(30), nullable=False)
 
-    employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    employee_id = db.Column(
+        db.Integer,
+        db.ForeignKey("employees.id"),
+        nullable=True
+    )
 
     note = db.Column(db.Text, nullable=True)
-    changed_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    changed_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False
+    )
 
     changed_by = db.relationship("Employee", foreign_keys=[employee_id])
 
     def serialize(self):
 
         return {
-
             "id": self.id,
             "service_id": self.service_id,
             "from_status": self.from_status,
             "to_status": self.to_status,
             "employee_id": self.employee_id,
-            "changed_by": f"{self.changed_by.first_name} {self.changed_by.last_name}" if self.changed_by else None,
+            "changed_by": (
+                f"{self.changed_by.first_name} {self.changed_by.last_name}"
+                if self.changed_by
+                else None
+            ),
             "note": self.note,
             "changed_at": self.changed_at.isoformat() if self.changed_at else None
-
         }
+
 
 # ============================================================
 #   PASSWORD RESET
 # ============================================================
 
 class PasswordResetToken(db.Model):
+
     __tablename__ = "password_reset_tokens"
 
     id = db.Column(db.Integer, primary_key=True)
 
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    token_hash = db.Column(db.String(255), nullable=False, unique=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False
+    )
 
-    expires_at = db.Column(db.DateTime, nullable=False)
-    used_at = db.Column(db.DateTime, nullable=True)
+    token_hash = db.Column(
+        db.String(255),
+        nullable=False,
+        unique=True
+    )
 
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False
+    )
+
+    used_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=True
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utc_now,
+        nullable=False
+    )
 
     user = db.relationship("User", backref="password_reset_tokens")
 
     def serialize(self):
+
         return {
             "id": self.id,
             "user_id": self.user_id,
